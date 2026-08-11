@@ -1,6 +1,7 @@
 // src/lib/api.ts
 import axios from 'axios';
 import Cookies from 'js-cookie';
+import { useAuthStore } from '@/store/useAuthStore';
 
 // 1. Buat Instance Axios dengan URL dari .env.local
 export const api = axios.create({
@@ -23,10 +24,16 @@ api.interceptors.request.use(
         /* 
           [MODE PENGEMBANGAN] 
           Karena backend kita menggunakan ContextualAuthGuard dengan mock-headers
-          untuk development, kita bisa menyuntikkan header sementara di sini jika diperlukan.
-          Nanti akan dihapus/diganti JWT asli di fase produksi.
+          untuk development, kita menyisipkan header dinamis dari state useAuthStore.
         */
-        // config.headers['x-mock-role'] = 'APIP_INTERNAL'; 
+        const user = useAuthStore.getState().user;
+        if (user) {
+            config.headers['x-mock-role'] = user.role;
+            config.headers['x-mock-user-id'] = user.id;
+            if (user.pegawaiId) {
+                config.headers['x-mock-pegawai-id'] = user.pegawaiId;
+            }
+        }
 
         return config;
     },

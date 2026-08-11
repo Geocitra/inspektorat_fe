@@ -1,13 +1,14 @@
 // src/features/monitoring/components/TlhpUploadPortal.tsx
 'use client';
 
-import { useTlhpStore, TlhpItem } from '@/store/useTlhpStore';
+import { useTlhpStore } from '@/store/useTlhpStore';
 import { 
-    FileText, Image, Upload, AlertCircle, CheckCircle2, ShieldAlert, MapPin, Loader2, Info
+    FileText, Image as ImageIcon, Upload, AlertCircle, CheckCircle2, ShieldAlert, MapPin, Loader2, Info, Eye
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 interface TlhpUploadPortalProps {
     stId: string;
@@ -22,6 +23,7 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
 
     const handleUploadPdf = (itemId: string) => {
         uploadDokumenBukti(itemId, 'BUKTI_SETORAN_NEGARA_DINAS_PENDIDIKAN.pdf');
+        toast.success('Bukti Setoran Diunggah', { description: 'Berkas BUKTI_SETORAN_NEGARA_DINAS_PENDIDIKAN.pdf berhasil ditautkan.' });
     };
 
     const handleUploadFoto = async (itemId: string, hasGps: boolean, isFar: boolean = false) => {
@@ -43,7 +45,6 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
             customCoords
         );
 
-        setIsUploadingId(itemId);
         setIsUploadingId(null);
     };
 
@@ -114,20 +115,52 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
 
                             {/* PREVIEW SUBMITTED EVIDENCE */}
                             {(item.buktiFile || item.buktiFoto) && (
-                                <div className="bg-slate-50 border border-slate-150 p-3 rounded-none text-xs space-y-2">
+                                <div className="bg-slate-50 border border-slate-155 p-3 rounded-none text-xs space-y-2">
                                     <p className="font-bold text-slate-700">Bukti yang telah diunggah:</p>
+                                    
                                     {item.buktiFile && (
-                                        <p className="text-slate-600 flex items-center gap-1">
-                                            <FileText className="w-3.5 h-3.5 text-red-500" />
-                                            {item.buktiFile}
-                                        </p>
+                                        <div className="text-slate-600 flex items-center justify-between gap-2 border-b border-slate-200/50 pb-1.5">
+                                            <span className="flex items-center gap-1">
+                                                <FileText className="w-3.5 h-3.5 text-red-500" />
+                                                {item.buktiFile}
+                                            </span>
+                                            <Dialog>
+                                                <DialogTrigger className="p-0 h-auto text-[10px] font-bold text-blue-600 flex items-center gap-1 bg-transparent hover:underline">
+                                                    <Eye className="w-3 h-3" /> Lihat Dokumen
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-4xl h-[700px] rounded-none">
+                                                    <DialogHeader>
+                                                        <DialogTitle className="text-xs font-bold uppercase tracking-wider">
+                                                            Dokumen Bukti Tindak Lanjut: {item.buktiFile}
+                                                        </DialogTitle>
+                                                    </DialogHeader>
+                                                    <iframe src="https://pdfobject.com/pdf/sample.pdf" className="w-full h-full border border-slate-200 mt-2" />
+                                                </DialogContent>
+                                            </Dialog>
+                                        </div>
                                     )}
+                                    
                                     {item.buktiFoto && (
                                         <div className="space-y-1.5">
-                                            <p className="text-slate-600 flex items-center gap-1">
-                                                <Image className="w-3.5 h-3.5 text-blue-500" />
-                                                {item.buktiFoto}
-                                            </p>
+                                            <div className="text-slate-600 flex items-center justify-between gap-2 border-b border-slate-200/50 pb-1.5">
+                                                <span className="flex items-center gap-1">
+                                                    <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                    {item.buktiFoto}
+                                                </span>
+                                                <Dialog>
+                                                    <DialogTrigger className="p-0 h-auto text-[10px] font-bold text-blue-600 flex items-center gap-1 bg-transparent hover:underline">
+                                                        <Eye className="w-3 h-3" /> Lihat Foto
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-3xl rounded-none">
+                                                        <DialogHeader>
+                                                            <DialogTitle className="text-xs font-bold uppercase tracking-wider">
+                                                                Foto Bukti Fisik Lapangan: {item.buktiFoto}
+                                                            </DialogTitle>
+                                                        </DialogHeader>
+                                                        <img src="https://picsum.photos/800/600" alt="Bukti Foto" className="w-full max-h-[500px] object-contain border border-slate-200 mt-2" />
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
                                             {item.buktiCoords && (
                                                 <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
                                                     <MapPin className="w-3 h-3 text-slate-400" />
@@ -182,7 +215,7 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
                                     ) : (
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-slate-750 flex items-center gap-1">
-                                                <Upload className="w-3.5 h-3.5 text-blue-650" />
+                                                <Upload className="w-3.5 h-3.5 text-blue-655" />
                                                 Unggah Dokumen Berkas PDF (Bukti Setoran)
                                             </label>
                                             <Button
@@ -206,7 +239,7 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
 
 function LockPlaceholderIcon() {
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-6 h-6 text-indigo-750">
+        <svg xmlns="http://www.w3.org/2050/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-6 h-6 text-indigo-750">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>

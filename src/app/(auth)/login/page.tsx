@@ -40,18 +40,28 @@ export default function LoginPage() {
             
             const role = isPimpinan 
                 ? ('APIP_PIMPINAN' as const) 
-                : isAuditor 
-                ? ('AUDITOR' as const) 
                 : isOpd
                 ? ('AUDITEE_OPD' as const)
-                : ('APIP_INTERNAL' as const);
+                : ('APIP_INTERNAL' as const); // Both Kasubag and Auditor are APIP_INTERNAL
 
             const mockUser = {
-                id: isPimpinan ? 'user-inspektur-uuid' : isAuditor ? 'user-auditor-uuid' : isOpd ? 'user-opd-uuid' : 'user-kasubag-uuid',
+                id: isPimpinan 
+                    ? '66666666-6666-6666-6666-666666666666' 
+                    : isAuditor 
+                    ? '77777777-7777-7777-7777-777777777777' 
+                    : isOpd 
+                    ? '88888888-8888-8888-8888-888888888888' 
+                    : '55555555-5555-5555-5555-555555555555',
                 email: email,
                 role: role,
-                pegawaiId: isPimpinan ? 'pegawai-inspektur-uuid' : isAuditor ? 'pegawai-auditor-uuid' : undefined,
-                opdId: isOpd ? 'opd-dinas-pendidikan' : undefined
+                pegawaiId: isPimpinan 
+                    ? 'bb222222-2222-2222-2222-222222222222' 
+                    : isAuditor 
+                    ? 'cc333333-3333-3333-3333-333333333333' // Budi Santoso/Heru
+                    : isOpd 
+                    ? undefined 
+                    : 'aa111111-1111-1111-1111-111111111111', // Kasubag
+                opdId: isOpd ? '22222222-2222-2222-2222-222222222222' : undefined
             };
 
             // Simpan ke Zustand & Cookies
@@ -61,7 +71,7 @@ export default function LoginPage() {
                 description: `Selamat datang. Anda masuk sebagai ${
                     role === 'APIP_PIMPINAN' 
                         ? 'Inspektur' 
-                        : role === 'AUDITOR' 
+                        : isAuditor 
                         ? 'Auditor / Tim Audit' 
                         : role === 'AUDITEE_OPD'
                         ? 'OPD / Auditee'

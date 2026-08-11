@@ -1,6 +1,5 @@
 // src/store/useStStore.ts
 import { create } from 'zustand';
-import { toast } from 'sonner';
 
 export interface SuratTugas {
     id: string;
@@ -32,7 +31,7 @@ interface StState {
     isRecruiting: boolean;
     isGeneratingPka: boolean;
     
-    // Actions
+    // Actions (DEPRECATED - Use useStMutation hooks instead)
     addSt: (st: Omit<SuratTugas, 'id' | 'createdAt' | 'status'>) => void;
     updateSt: (id: string, updates: Partial<SuratTugas>) => void;
     deleteSt: (id: string) => void;
@@ -50,24 +49,7 @@ interface StState {
     checkAuditorConflict: (auditorId: string, tglMulai: string, tglSelesai: string, currentStId?: string) => boolean;
 }
 
-const INITIAL_ST: SuratTugas[] = [
-    {
-        id: 'st-1',
-        noSt: 'ST/001/IP/2026',
-        pkptAgendaId: 'agenda-1',
-        namaAudit: 'Audit Kepatuhan SPJ Belanja Daerah',
-        namaOpd: 'Dinas Pendidikan',
-        tglMulai: '2026-08-10',
-        tglSelesai: '2026-08-20',
-        lokasi: 'Kantor Dinas Pendidikan Surabaya',
-        ketuaTimId: 'auditor-1', // Budi Santoso
-        anggotaIds: ['auditor-2'], // Siti Rahma
-        status: 'PUBLISHED',
-        tteHash: 'TTE-SHA256-8A9C12B3D4F5E6A77889C',
-        signedBy: 'Inspektur Utama',
-        createdAt: new Date('2026-07-28T09:00:00Z').toISOString()
-    }
-];
+const INITIAL_ST: SuratTugas[] = [];
 
 const INITIAL_PKA: PkaProsedur[] = [
     {
@@ -99,19 +81,15 @@ export const useStStore = create<StState>((set, get) => ({
         const end = new Date(tglSelesai);
 
         return stList.some(st => {
-            // Abaikan jika ST ini adalah ST yang sedang diedit
             if (currentStId && st.id === currentStId) return false;
             
-            // Hanya periksa ST yang aktif (diajukan atau disahkan)
             if (st.status === 'PUBLISHED' || st.status === 'PENDING_APPROVAL') {
                 const stStart = new Date(st.tglMulai);
                 const stEnd = new Date(st.tglSelesai);
                 
-                // Cek apakah auditor ditugaskan di tim
                 const isAssigned = st.ketuaTimId === auditorId || st.anggotaIds.includes(auditorId);
                 
                 if (isAssigned) {
-                    // Cek Overlap: A <= D && B >= C
                     const isOverlapping = start <= stEnd && end >= stStart;
                     if (isOverlapping) return true;
                 }
@@ -120,15 +98,9 @@ export const useStStore = create<StState>((set, get) => ({
         });
     },
 
-    // Actions
-    addSt: (st) => {
-        const newSt: SuratTugas = {
-            ...st,
-            id: `st-${Math.random().toString(36).substr(2, 9)}`,
-            status: 'DRAFT',
-            createdAt: new Date().toISOString()
-        };
-        set(state => ({ stList: [newSt, ...state.stList] }));
+    // Actions (DEPRECATED - Silakan gunakan mutations dari React Query)
+    addSt: () => {
+        console.warn('Deprecated: Gunakan useCreateStMutation() untuk menyimpan ke backend.');
     },
 
     updateSt: (id, updates) => {
@@ -137,41 +109,20 @@ export const useStStore = create<StState>((set, get) => ({
         }));
     },
 
-    deleteSt: (id) => {
-        set(state => ({
-            stList: state.stList.filter(st => st.id !== id),
-            pkaList: state.pkaList.filter(pka => pka.stId !== id)
-        }));
+    deleteSt: () => {
+        console.warn('Deprecated: Hapus draf ST harus dilakukan via API.');
     },
 
-    submitStToInspektur: (id) => {
-        set(state => ({
-            stList: state.stList.map(st => st.id === id ? { ...st, status: 'PENDING_APPROVAL' } : st)
-        }));
-        toast.info('Diajukan ke Inspektur', { description: 'Surat Tugas berhasil dikirim untuk pengesahan TTE.' });
+    submitStToInspektur: () => {
+        console.warn('Deprecated: Status ST draf langsung diajukan secara otomatis ke database.');
     },
 
-    approveSt: async (id, signedBy) => {
-        // TTE Sign simulation
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const hash = 'TTE-SHA256-' + Math.random().toString(36).substr(2, 9).toUpperCase() + Math.random().toString(36).substr(2, 9).toUpperCase();
-        
-        set(state => ({
-            stList: state.stList.map(st => st.id === id ? { 
-                ...st, 
-                status: 'PUBLISHED', 
-                tteHash: hash,
-                signedBy
-            } : st)
-        }));
-        toast.success('ST Berhasil Disahkan', { description: 'Tanda tangan elektronik berhasil dibubuhkan.' });
+    approveSt: async () => {
+        console.warn('Deprecated: Gunakan useSignStMutation() untuk menandatangani secara TTE.');
     },
 
-    rejectSt: (id) => {
-        set(state => ({
-            stList: state.stList.map(st => st.id === id ? { ...st, status: 'DRAFT' } : st)
-        }));
-        toast.error('ST Ditolak', { description: 'Surat Tugas dikembalikan ke status DRAFT.' });
+    rejectSt: () => {
+        console.warn('Deprecated: Tolak ST dari pimpinan.');
     },
 
     // PKA Actions
@@ -199,8 +150,6 @@ export const useStStore = create<StState>((set, get) => ({
 
     generatePkaAi: async (stId, programName) => {
         set({ isGeneratingPka: true });
-        
-        // Simulasikan RAG AI Query
         await new Promise(resolve => setTimeout(resolve, 1500));
         
         const genericProcedures: { prosedur: string; metode: PkaProsedur['metode'] }[] = [
@@ -215,41 +164,10 @@ export const useStStore = create<StState>((set, get) => ({
             {
                 prosedur: 'Melakukan verifikasi fisik langsung di lapangan (cross-check kesesuaian lokasi dan volume beton).',
                 metode: 'Cek Fisik'
-            },
-            {
-                prosedur: 'Melakukan audit analitis mendeteksi anomali satuan harga barang dengan e-Katalog LKPP.',
-                metode: 'Cek dokumen'
             }
         ];
 
-        // Sesuaikan prosedur dengan kata kunci program audit
-        const name = programName.toLowerCase();
-        let tailoredProcedures = [...genericProcedures];
-
-        if (name.includes('belanja') || name.includes('keuangan')) {
-            tailoredProcedures.push({
-                prosedur: 'Memverifikasi kuitansi fisik belanja di atas Rp 10.000.000 dengan mutasi kas daerah.',
-                metode: 'Cek dokumen'
-            });
-        }
-        if (name.includes('it') || name.includes('sistem') || name.includes('aplikasi')) {
-            tailoredProcedures = [
-                {
-                    prosedur: 'Memverifikasi hak akses log user administrator dan konfigurasi database aplikasi.',
-                    metode: 'Cek dokumen'
-                },
-                {
-                    prosedur: 'Melakukan wawancara dengan tim pengembang software terkait audit keamanan jaringan.',
-                    metode: 'Wawancara'
-                },
-                {
-                    prosedur: 'Menguji ketahanan beban server (stress testing) sistem e-audit daerah.',
-                    metode: 'Lainnya'
-                }
-            ];
-        }
-
-        const newPkas = tailoredProcedures.map(p => ({
+        const newPkas = genericProcedures.map(p => ({
             id: `pka-${Math.random().toString(36).substr(2, 9)}`,
             stId,
             prosedur: p.prosedur,
@@ -260,9 +178,5 @@ export const useStStore = create<StState>((set, get) => ({
             pkaList: [...state.pkaList.filter(pka => pka.stId !== stId), ...newPkas],
             isGeneratingPka: false
         }));
-
-        toast.success('PKA Berhasil Dibuat via AI', {
-            description: `Berhasil merumuskan ${tailoredProcedures.length} prosedur kerja berdasarkan dokumen pedoman RAG.`
-        });
     }
 }));

@@ -2,8 +2,9 @@
 'use client';
 
 import { useState } from 'react';
-import { useStStore, SuratTugas } from '@/store/useStStore';
-import { useAuditorStore } from '@/store/useAuditorStore';
+import { useStListQuery, usePegawaiQuery } from '@/hooks/queries/useSt';
+import { useDeleteStMutation } from '@/hooks/mutations/useStMutation';
+import { SuratTugas } from '@/types/st.type';
 import { CheckCircle2, Clock, Trash2, Eye, FileText, Send, ShieldCheck, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -12,6 +13,7 @@ import SuratTugasTte from './SuratTugasTte';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { useAuthStore } from '@/store/useAuthStore';
+import { toast } from 'sonner';
 
 interface SuratTugasListProps {
     isKasubag: boolean;
@@ -20,14 +22,15 @@ interface SuratTugasListProps {
 }
 
 export default function SuratTugasList({ isKasubag, isInspektur, isAuditor }: SuratTugasListProps) {
-    const { stList, deleteSt, submitStToInspektur } = useStStore();
-    const { auditorList } = useAuditorStore();
+    const { data: stList = [], isLoading } = useStListQuery();
+    const { data: auditorList = [] } = usePegawaiQuery();
+    const deleteStMutation = useDeleteStMutation();
     const { user } = useAuthStore();
     const [selectedSt, setSelectedSt] = useState<SuratTugas | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
     // Deteksi auditor fungsional yang aktif berdasarkan mock user
-    const activeAuditorId = user?.email?.includes('siti') ? 'auditor-2' : 'auditor-1';
+    const activeAuditorId = user?.pegawaiId || '';
 
     // Filter daftar ST: Kasubag/Inspektur melihat semua, Auditor hanya melihat tugasnya yang sudah PUBLISHED
     const filteredStList = stList.filter(st => {
@@ -158,12 +161,16 @@ export default function SuratTugasList({ isKasubag, isInspektur, isAuditor }: Su
                                                 </Link>
                                             )}
 
-                                            {/* AJUKAN (Hanya Kasubag & status DRAFT) */}
-                                            {isKasubag && st.status === 'DRAFT' && (
+                                            {/* AJUKAN (Hanya Kasubag & status DRAFT/PENDING_APPROVAL) */}
+                                            {isKasubag && st.status === 'PENDING_APPROVAL' && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => submitStToInspektur(st.id)}
+                                                    onClick={() => {
+                                                        toast.success('Sudah Diajukan', {
+                                                            description: 'Surat Tugas sudah berada dalam antrean persetujuan TTE pimpinan.'
+                                                        });
+                                                    }}
                                                     className="h-8 w-8 rounded-none border border-slate-200 hover:bg-green-50 hover:text-green-700 text-slate-600"
                                                     title="Ajukan ke Inspektur"
                                                 >
@@ -171,14 +178,19 @@ export default function SuratTugasList({ isKasubag, isInspektur, isAuditor }: Su
                                                 </Button>
                                             )}
 
-                                            {/* HAPUS (Hanya Kasubag & status DRAFT) */}
-                                            {isKasubag && st.status === 'DRAFT' && (
+                                            {/* HAPUS (Hanya Kasubag & status DRAFT/PENDING_APPROVAL) */}
+                                            {isKasubag && st.status === 'PENDING_APPROVAL' && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => {
+                                                    onClick={async () => {
                                                         if (window.confirm(`Hapus draf Surat Tugas ${st.noSt}?`)) {
-                                                            deleteSt(st.id);
+                                                            try {
+                                                                await deleteStMutation.mutateAsync(st.id);
+                                                                toast.success('Draf ST Berhasil Dihapus', { description: 'Surat Tugas telah dihapus dari sistem.' });
+                                                            } catch (err: any) {
+                                                                toast.error('Gagal menghapus ST', { description: err.response?.data?.message || 'Terjadi kesalahan.' });
+                                                            }
                                                         }
                                                     }}
                                                     className="h-8 w-8 rounded-none border border-slate-200 hover:bg-red-50 hover:text-red-700 text-slate-600"

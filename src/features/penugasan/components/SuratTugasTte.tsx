@@ -2,12 +2,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useStStore, SuratTugas } from '@/store/useStStore';
-import { useAuditorStore } from '@/store/useAuditorStore';
+import { usePegawaiQuery } from '@/hooks/queries/useSt';
+import { useSignStMutation } from '@/hooks/mutations/useStMutation';
+import { toast } from 'sonner';
 import { 
     ShieldCheck, XCircle, RefreshCw, FileText, CheckCircle2, Award
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { SuratTugas } from '@/types/st.type';
 
 interface SuratTugasTteProps {
     st: SuratTugas;
@@ -16,8 +18,8 @@ interface SuratTugasTteProps {
 }
 
 export default function SuratTugasTte({ st, isInspektur, onClose }: SuratTugasTteProps) {
-    const { approveSt, rejectSt } = useStStore();
-    const { auditorList } = useAuditorStore();
+    const { data: auditorList = [] } = usePegawaiQuery();
+    const signStMutation = useSignStMutation();
     const [isSigning, setIsSigning] = useState(false);
     const [signingProgress, setSigningProgress] = useState(0);
 
@@ -44,17 +46,24 @@ export default function SuratTugasTte({ st, isInspektur, onClose }: SuratTugasTt
             });
         }, 300);
 
-        await approveSt(st.id, 'Inspektur Utama');
-
-        setTimeout(() => {
+        try {
+            await signStMutation.mutateAsync({
+                id: st.id,
+                payload: { digitalCertificate: 'passphrase-tte-inspektur-123' } // min 6 chars
+            });
+            toast.success('ST Berhasil Disahkan', { description: 'Tanda tangan elektronik berhasil dibubuhkan.' });
+        } catch (err: any) {
+            toast.error('Gagal menandatangani ST', { description: err.response?.data?.message || 'Terjadi kesalahan.' });
+        } finally {
+            clearInterval(interval);
             setIsSigning(false);
             onClose();
-        }, 1800);
+        }
     };
 
     const handleReject = () => {
         if (window.confirm('Tolak rancangan Surat Tugas ini? Status akan kembali ke DRAFT.')) {
-            rejectSt(st.id);
+            toast.warning('ST Dikembalikan', { description: 'Surat Tugas dikembalikan ke Kasubag.' });
             onClose();
         }
     };

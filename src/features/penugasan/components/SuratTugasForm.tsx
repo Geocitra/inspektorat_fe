@@ -6,8 +6,8 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useStStore } from '@/store/useStStore';
-import { useAuditorStore } from '@/store/useAuditorStore';
-import { usePkptStore } from '@/store/usePkptStore';
+import { useStListQuery, usePegawaiQuery, useAgendaQuery } from '@/hooks/queries/useSt';
+import { useCreateStMutation, useRecommendTeamMutation } from '@/hooks/mutations/useStMutation';
 import { toast } from 'sonner';
 import { Sparkles, Calendar, MapPin, FileText, AlertTriangle, User, Users, Info } from 'lucide-react';
 
@@ -24,6 +24,7 @@ const stFormSchema = z.object({
     tglMulai: z.string().min(1, 'Tanggal mulai wajib diisi'),
     tglSelesai: z.string().min(1, 'Tanggal selesai wajib diisi'),
     lokasi: z.string().min(3, 'Lokasi pemeriksaan wajib diisi'),
+    pengawasTeknisId: z.string().min(1, 'Harap pilih Pengawas Teknis'),
     ketuaTimId: z.string().min(1, 'Harap pilih Ketua Tim'),
     anggotaIds: z.array(z.string()).min(1, 'Pilih minimal 1 Anggota Tim'),
 });
@@ -35,13 +36,18 @@ interface SuratTugasFormProps {
 }
 
 export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
-    const { addSt, checkAuditorConflict } = useStStore();
-    const { auditorList } = useAuditorStore();
-    const { draftAgendas, status: pkptStatus } = usePkptStore();
+    const { data: stList = [] } = useStListQuery();
+    const { data: auditorList = [] } = usePegawaiQuery();
+    const { data: agendas = [] } = useAgendaQuery();
+
+    const createStMutation = useCreateStMutation();
+    const recommendTeamMutation = useRecommendTeamMutation();
+    const checkAuditorConflict = useStStore((state) => state.checkAuditorConflict);
+
     const [isRecruiting, setIsRecruiting] = useState(false);
 
-    // Dapatkan daftar PKPT yang sudah disahkan (PUBLISHED)
-    const activeAgendas = pkptStatus === 'PUBLISHED' ? draftAgendas : [];
+    // Filter agenda yang belum memiliki Surat Tugas
+    const activeAgendas = agendas.filter(agenda => !agenda.suratTugas);
 
     const form = useForm<StFormValues>({
         resolver: zodResolver(stFormSchema),
@@ -51,6 +57,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
             tglMulai: '',
             tglSelesai: '',
             lokasi: '',
+            pengawasTeknisId: '',
             ketuaTimId: '',
             anggotaIds: [],
         }
@@ -59,6 +66,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
     const selectedPkptId = useWatch({ control: form.control, name: 'pkptAgendaId' });
     const tglMulai = useWatch({ control: form.control, name: 'tglMulai' });
     const tglSelesai = useWatch({ control: form.control, name: 'tglSelesai' });
+    const pengawasTeknisId = useWatch({ control: form.control, name: 'pengawasTeknisId' });
     const ketuaTimId = useWatch({ control: form.control, name: 'ketuaTimId' });
     const anggotaIds = useWatch({ control: form.control, name: 'anggotaIds' }) || [];
 
@@ -67,12 +75,13 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         if (selectedPkptId) {
             const agenda = activeAgendas.find(a => a.id === selectedPkptId);
             if (agenda) {
-                form.setValue('lokasi', `Kantor ${agenda.namaOpd}`);
+                form.setValue('lokasi', `Kantor ${agenda.opd?.namaOpd || 'OPD Target'}`);
             }
         }
     }, [selectedPkptId, activeAgendas, form]);
 
     // SMART CONFLICT STATUSES
+    const pengawasConflict = checkAuditorConflict(pengawasTeknisId, tglMulai, tglSelesai);
     const ketuaConflict = checkAuditorConflict(ketuaTimId, tglMulai, tglSelesai);
     const conflictedAnggotaMap = (anggotaIds || []).reduce((acc, id) => {
         acc[id] = checkAuditorConflict(id, tglMulai, tglSelesai);
@@ -86,65 +95,53 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
             return;
         }
 
+        if (!tglMulai || !tglSelesai) {
+            toast.error('Gagal', { description: 'Isi tanggal mulai dan selesai terlebih dahulu untuk mendeteksi ketersediaan jadwal.' });
+            return;
+        }
+
         const agenda = activeAgendas.find(a => a.id === selectedPkptId);
         if (!agenda) return;
 
         setIsRecruiting(true);
         toast.info('AI Engine Memproses...', { description: 'Memindai spesialisasi auditor & ketersediaan jadwal...' });
 
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        const programName = agenda.namaAudit.toLowerCase();
-        
-        // Cari auditor yang tidak memiliki konflik jadwal di tanggal tersebut (jika tanggal diisi)
-        const availableAuditors = auditorList.filter(aud => {
-            const hasConflict = checkAuditorConflict(aud.id, tglMulai, tglSelesai);
-            return !hasConflict;
-        });
-
-        const pool = availableAuditors.length > 0 ? availableAuditors : auditorList;
-
-        let recommendedKetuaId = '';
-        let recommendedAnggotaId = '';
-
-        // Aturan Pencocokan Keahlian AI
-        if (programName.includes('it') || programName.includes('sistem') || programName.includes('teknologi')) {
-            // Butuh spesialis IT / CISA
-            const matchKetua = pool.find(aud => aud.kompetensi.some(c => c.toLowerCase().includes('it') || c.toLowerCase().includes('cisa')));
-            recommendedKetuaId = matchKetua?.id || pool[0]?.id;
-        } else if (programName.includes('spj') || programName.includes('anggaran') || programName.includes('keuangan')) {
-            // Butuh akuntan / CFrA / Keuangan
-            const matchKetua = pool.find(aud => aud.kompetensi.some(c => c.toLowerCase().includes('keuangan') || c.toLowerCase().includes('cfra') || c.toLowerCase().includes('akuntansi')));
-            recommendedKetuaId = matchKetua?.id || pool[0]?.id;
-        } else {
-            // Sertifikasi PBJ atau investigasi
-            const matchKetua = pool.find(aud => aud.kompetensi.some(c => c.toLowerCase().includes('pbj') || c.toLowerCase().includes('investigatif')));
-            recommendedKetuaId = matchKetua?.id || pool[0]?.id;
-        }
-
-        // Cari anggota tim (tidak sama dengan ketua)
-        const candidateAnggota = pool.filter(aud => aud.id !== recommendedKetuaId);
-        recommendedAnggotaId = candidateAnggota[0]?.id || '';
-
-        if (recommendedKetuaId && recommendedAnggotaId) {
-            form.setValue('ketuaTimId', recommendedKetuaId);
-            form.setValue('anggotaIds', [recommendedAnggotaId]);
-            toast.success('Rekomendasi AI Diterapkan', {
-                description: `Ketua Tim: ${auditorList.find(a => a.id === recommendedKetuaId)?.nama}. Anggota: ${auditorList.find(a => a.id === recommendedAnggotaId)?.nama}.`
+        try {
+            const focus = agenda.substansiDokumen?.namaAudit || agenda.jenisPengawasan || 'Audit Pengawasan';
+            const recommendationResult = await recommendTeamMutation.mutateAsync({
+                tanggalMulai: tglMulai,
+                tanggalSelesai: tglSelesai,
+                fokusAudit: focus,
             });
-        } else {
-            toast.warning('Rekomendasi Terbatas', { description: 'Tidak ada kecocokan auditor fungsional yang tersedia.' });
-        }
 
-        setIsRecruiting(false);
+            const recs = recommendationResult.recommendation;
+            
+            // Map rekomendasi peran tim ke formulir
+            const pj = recs.find(r => r.peranDalamTim === 'Pengawas_Teknis');
+            const kt = recs.find(r => r.peranDalamTim === 'Ketua_Tim');
+            const ats = recs.filter(r => r.peranDalamTim === 'Anggota_Tim').map(r => r.auditorId);
+
+            if (pj) form.setValue('pengawasTeknisId', pj.auditorId);
+            if (kt) form.setValue('ketuaTimId', kt.auditorId);
+            if (ats.length > 0) form.setValue('anggotaIds', ats);
+
+            toast.success('Rekomendasi AI Diterapkan', {
+                description: `Pengawas: ${pj?.nama || '-'}. Ketua: ${kt?.nama || '-'}. Anggota: ${ats.map(id => auditorList.find(a => a.id === id)?.nama).join(', ')}.`
+            });
+        } catch (err: any) {
+            toast.error('AI Gagal merekrut', { description: err.response?.data?.message || 'Terjadi kesalahan sistem.' });
+        } finally {
+            setIsRecruiting(false);
+        }
     };
 
-    const onSubmit = (values: StFormValues) => {
+    const onSubmit = async (values: StFormValues) => {
         // Cek kembali konflik jadwal sebelum menyimpan
+        const hasPjConflict = checkAuditorConflict(values.pengawasTeknisId, values.tglMulai, values.tglSelesai);
         const hasKetuaConflict = checkAuditorConflict(values.ketuaTimId, values.tglMulai, values.tglSelesai);
         const hasAnggotaConflict = values.anggotaIds.some(id => checkAuditorConflict(id, values.tglMulai, values.tglSelesai));
 
-        if (hasKetuaConflict || hasAnggotaConflict) {
+        if (hasPjConflict || hasKetuaConflict || hasAnggotaConflict) {
             toast.error('Penugasan Gagal', { description: 'Surat Tugas tidak bisa dibuat karena ada anggota tim yang bentrok jadwal.' });
             return;
         }
@@ -152,21 +149,28 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         const agenda = activeAgendas.find(a => a.id === values.pkptAgendaId);
         if (!agenda) return;
 
-        addSt({
-            noSt: values.noSt,
-            pkptAgendaId: values.pkptAgendaId,
-            namaAudit: agenda.namaAudit,
-            namaOpd: agenda.namaOpd,
-            tglMulai: values.tglMulai,
-            tglSelesai: values.tglSelesai,
-            lokasi: values.lokasi,
-            ketuaTimId: values.ketuaTimId,
-            anggotaIds: values.anggotaIds,
-        });
+        // Siapkan struktur tim payload
+        const auditorsPayload = [
+            { auditorId: values.pengawasTeknisId, peranDalamTim: 'Pengawas_Teknis' as const },
+            { auditorId: values.ketuaTimId, peranDalamTim: 'Ketua_Tim' as const },
+            ...values.anggotaIds.map(id => ({ auditorId: id, peranDalamTim: 'Anggota_Tim' as const }))
+        ];
 
-        toast.success('Draf ST Berhasil Dibuat', { description: 'Surat Tugas baru telah ditambahkan ke daftar antrean.' });
-        form.reset();
-        onSuccess();
+        try {
+            await createStMutation.mutateAsync({
+                agendaAuditId: values.pkptAgendaId,
+                nomorSt: values.noSt,
+                tanggalMulai: values.tglMulai,
+                tanggalSelesai: values.tglSelesai,
+                auditors: auditorsPayload,
+            });
+
+            toast.success('Draf ST Berhasil Dibuat', { description: 'Surat Tugas baru telah disimpan di database.' });
+            form.reset();
+            onSuccess();
+        } catch (err: any) {
+            toast.error('Gagal membuat Surat Tugas', { description: err.response?.data?.message || 'Terjadi kesalahan.' });
+        }
     };
 
     return (
@@ -180,7 +184,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                     <Button
                         type="button"
                         onClick={handleAiRecommendation}
-                        disabled={isRecruiting}
+                        disabled={isRecruiting || recommendTeamMutation.isPending}
                         variant="outline"
                         className="border-blue-200 text-blue-700 hover:bg-blue-50 text-[11px] h-7 rounded-none shadow-none flex items-center gap-1"
                     >
@@ -193,9 +197,9 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
             {activeAgendas.length === 0 ? (
                 <div className="border border-amber-200 bg-amber-50/20 p-4 text-center rounded-none space-y-1">
                     <Info className="w-6 h-6 text-amber-600 mx-auto" />
-                    <h4 className="text-xs font-bold text-amber-800">PKPT Belum Disahkan</h4>
+                    <h4 className="text-xs font-bold text-amber-800">PKPT Belum Disahkan atau Semua Agenda Terjadwal</h4>
                     <p className="text-slate-500 text-xs max-w-sm mx-auto leading-relaxed">
-                        Penyusunan Surat Tugas hanya dapat dilakukan berdasarkan draf PKPT yang telah **Disahkan & TTE** oleh Inspektur Utama. Silakan sahkan PKPT terlebih dahulu.
+                        Penyusunan Surat Tugas hanya dapat dilakukan berdasarkan agenda PKPT yang telah **Disahkan** dan belum memiliki Surat Tugas aktif.
                     </p>
                 </div>
             ) : (
@@ -209,7 +213,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel className="text-xs font-semibold text-slate-700">Pilih Acuan PKPT</FormLabel>
-                                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                        <Select onValueChange={field.onChange} value={field.value}>
                                             <FormControl>
                                                 <SelectTrigger className="rounded-none border-slate-200 text-xs focus:border-blue-500">
                                                     <SelectValue placeholder="Pilih Objek Audit yang Sah" />
@@ -218,7 +222,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                             <SelectContent className="rounded-none">
                                                 {activeAgendas.map(agenda => (
                                                     <SelectItem key={agenda.id} value={agenda.id} className="text-xs">
-                                                        {agenda.namaAudit} ({agenda.namaOpd})
+                                                        {agenda.substansiDokumen?.namaAudit || agenda.jenisPengawasan} ({agenda.opd?.namaOpd})
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -291,105 +295,156 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                             />
                         </div>
 
-                        {/* TIM PEMERIKSA */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-slate-100 pt-4">
-                            
-                            {/* KETUA TIM SELECT */}
-                            <div className="space-y-2">
-                                <FormField
-                                    control={form.control}
-                                    name="ketuaTimId"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-slate-700">Ketua Tim Audit</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger className={`rounded-none text-xs focus:border-blue-500 ${ketuaConflict ? 'border-red-500' : 'border-slate-200'}`}>
-                                                        <SelectValue placeholder="Pilih Ketua Tim" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent className="rounded-none">
-                                                    {auditorList.map(aud => (
-                                                        <SelectItem key={aud.id} value={aud.id} className="text-xs">
-                                                            {aud.nama}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                
-                                {ketuaConflict && (
-                                    <div className="flex items-center gap-1 text-[11px] text-red-600 font-bold bg-red-50 p-2 border border-red-200">
-                                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                                        <span>Ketua Tim memiliki bentrok jadwal di tanggal tersebut!</span>
-                                    </div>
-                                )}
-                            </div>
+                            {/* NEW CARD-BASED AUDITOR TEAM SELECTION */}
+                            <div className="col-span-1 sm:col-span-2 space-y-4 border-t border-slate-100 pt-4">
+                                <div>
+                                    <Label className="text-xs font-bold text-slate-800 uppercase tracking-wider">Susun Tim Auditor (Socio-Selection)</Label>
+                                    <p className="text-[10px] text-slate-450 mt-0.5">
+                                        Klik tombol peran (**PJ** untuk Pengawas, **KT** untuk Ketua, **AT** untuk Anggota) pada kartu masing-masing auditor untuk menetapkan peran mereka dalam tim pengawasan ini.
+                                    </p>
+                                </div>
 
-                            {/* ANGGOTA TIM MULTI CHECKBOX */}
-                            <div className="space-y-2">
-                                <Label className="text-xs font-semibold text-slate-700">Anggota Tim Audit (Pilih Minimal 1)</Label>
-                                <div className="border border-slate-200 p-3 bg-slate-50/50 max-h-40 overflow-y-auto space-y-2.5 rounded-none">
-                                    {auditorList
-                                        .filter(aud => aud.id !== ketuaTimId) // Ketua tidak bisa jadi anggota
-                                        .map(aud => {
-                                            const isChecked = anggotaIds.includes(aud.id);
-                                            const hasConflict = conflictedAnggotaMap[aud.id];
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                    {auditorList.map(aud => {
+                                        const isPT = pengawasTeknisId === aud.id;
+                                        const isKT = ketuaTimId === aud.id;
+                                        const isAT = anggotaIds.includes(aud.id);
+                                        const hasConflict = checkAuditorConflict(aud.id, tglMulai, tglSelesai);
+                                        
+                                        // Asosiasi badge keahlian audit
+                                        const expertise = (aud.jabatan || '').includes('Madya') 
+                                            ? ['CFrA', 'Investigasi'] 
+                                            : (aud.jabatan || '').includes('Muda')
+                                            ? ['Akuntan', 'CA']
+                                            : ['CISA', 'Audit IT'];
 
-                                            return (
-                                                <div key={aud.id} className="flex items-start gap-2.5">
-                                                    <input
-                                                        type="checkbox"
-                                                        id={`anggota-${aud.id}`}
-                                                        checked={isChecked}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                form.setValue('anggotaIds', [...anggotaIds, aud.id]);
-                                                            } else {
-                                                                form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
-                                                            }
-                                                        }}
-                                                        className="w-3.5 h-3.5 border-slate-300 text-blue-600 focus:ring-blue-500 mt-1 cursor-pointer"
-                                                    />
-                                                    <div className="leading-none space-y-1">
-                                                        <label 
-                                                            htmlFor={`anggota-${aud.id}`} 
-                                                            className={`text-xs font-semibold cursor-pointer ${hasConflict ? 'text-red-600' : 'text-slate-800'}`}
-                                                        >
-                                                            {aud.nama}
-                                                        </label>
-                                                        <p className="text-[10px] text-slate-400">NIP. {aud.nip}</p>
-                                                        {isChecked && hasConflict && (
-                                                            <span className="inline-block text-[9px] text-red-600 font-bold bg-red-50 px-1.5 py-0.5 border border-red-200 mt-1">
-                                                                Bentrok Jadwal!
+                                        return (
+                                            <div 
+                                                key={aud.id} 
+                                                className={`border p-3.5 flex flex-col justify-between space-y-3 transition-all rounded-none ${
+                                                    isPT ? 'border-blue-600 bg-blue-50/10 ring-1 ring-blue-500' :
+                                                    isKT ? 'border-amber-600 bg-amber-50/10 ring-1 ring-amber-500' :
+                                                    isAT ? 'border-emerald-600 bg-emerald-50/10 ring-1 ring-emerald-500' :
+                                                    'border-slate-200 bg-white hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                {/* Header Kartu */}
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex gap-2 items-center">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-650 shrink-0">
+                                                            {aud.nama.substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div className="leading-tight">
+                                                            <h4 className="text-xs font-bold text-slate-800">{aud.nama}</h4>
+                                                            <p className="text-[9px] text-slate-400">NIP. {aud.nip}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`w-2 h-2 rounded-full ${hasConflict ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} title={hasConflict ? 'Bentrok Jadwal' : 'Tersedia'} />
+                                                </div>
+
+                                                {/* Jabatan & Badge Kompetensi */}
+                                                <div className="space-y-1.5">
+                                                    <p className="text-[9px] text-slate-450 font-semibold">{aud.jabatan || 'Auditor Ahli'}</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {expertise.map(exp => (
+                                                            <span key={exp} className="text-[8px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+                                                                {exp}
                                                             </span>
-                                                        )}
+                                                        ))}
+                                                        {isPT && <span className="text-[8px] font-bold px-1.5 py-0.5 bg-blue-600 text-white rounded">Pengawas (PT)</span>}
+                                                        {isKT && <span className="text-[8px] font-bold px-1.5 py-0.5 bg-amber-600 text-white rounded">Ketua (KT)</span>}
+                                                        {isAT && <span className="text-[8px] font-bold px-1.5 py-0.5 bg-emerald-600 text-white rounded">Anggota (AT)</span>}
                                                     </div>
                                                 </div>
-                                            );
-                                        })}
+
+                                                {/* Bar Tombol Peran */}
+                                                <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-100">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            if (isPT) {
+                                                                form.setValue('pengawasTeknisId', '');
+                                                            } else {
+                                                                form.setValue('pengawasTeknisId', aud.id);
+                                                                if (isKT) form.setValue('ketuaTimId', '');
+                                                                if (isAT) form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
+                                                            }
+                                                        }}
+                                                        className={`h-6 text-[9px] font-bold rounded-none p-0 ${
+                                                            isPT ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-550 hover:bg-blue-50 hover:text-blue-650'
+                                                        }`}
+                                                    >
+                                                        PJ
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            if (isKT) {
+                                                                form.setValue('ketuaTimId', '');
+                                                            } else {
+                                                                form.setValue('ketuaTimId', aud.id);
+                                                                if (isPT) form.setValue('pengawasTeknisId', '');
+                                                                if (isAT) form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
+                                                            }
+                                                        }}
+                                                        className={`h-6 text-[9px] font-bold rounded-none p-0 ${
+                                                            isKT ? 'bg-amber-600 text-white hover:bg-amber-700' : 'text-slate-550 hover:bg-amber-50 hover:text-amber-650'
+                                                        }`}
+                                                    >
+                                                        KT
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            if (isAT) {
+                                                                form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
+                                                            } else {
+                                                                form.setValue('anggotaIds', [...anggotaIds, aud.id]);
+                                                                if (isPT) form.setValue('pengawasTeknisId', '');
+                                                                if (isKT) form.setValue('ketuaTimId', '');
+                                                            }
+                                                        }}
+                                                        className={`h-6 text-[9px] font-bold rounded-none p-0 ${
+                                                            isAT ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-slate-550 hover:bg-emerald-50 hover:text-emerald-650'
+                                                        }`}
+                                                    >
+                                                        AT
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <FormField
-                                    control={form.control}
-                                    name="anggotaIds"
-                                    render={() => (
-                                        <FormItem>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+
+                                <div className="flex gap-2">
+                                    <FormField
+                                        control={form.control}
+                                        name="pengawasTeknisId"
+                                        render={() => <FormMessage className="text-[10px]" />}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="ketuaTimId"
+                                        render={() => <FormMessage className="text-[10px]" />}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="anggotaIds"
+                                        render={() => <FormMessage className="text-[10px]" />}
+                                    />
+                                </div>
                             </div>
-                        </div>
 
                         <div className="pt-3 border-t border-slate-100 flex justify-end">
                             <Button 
                                 type="submit" 
+                                disabled={createStMutation.isPending}
                                 className="bg-blue-600 hover:bg-blue-700 rounded-none text-xs font-bold shadow-none"
                             >
-                                Simpan Draf Surat Tugas
+                                {createStMutation.isPending ? 'Menyimpan...' : 'Simpan Draf Surat Tugas'}
                             </Button>
                         </div>
                     </form>

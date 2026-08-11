@@ -3,17 +3,52 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Building2, Users } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, BookOpen, ShieldAlert, FileText, ClipboardList, FileCheck, TrendingUp } from 'lucide-react';
+import { useAuthStore } from '@/store/useAuthStore';
 import { cn } from '@/lib/utils'; // Bawaan shadcn
 
 const MENU_ITEMS = [
-    { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'Master OPD', href: '/dashboard/opd', icon: Building2 },
-    { name: 'Master Pegawai', href: '/dashboard/pegawai', icon: Users },
+    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+    { name: 'Master OPD', href: '/planning/master-opd', icon: Building2 },
+    { name: 'Manajemen Auditor', href: '/planning/master-auditor', icon: Users },
+    { name: 'Knowledge Base', href: '/planning/ingestion', icon: BookOpen },
+    { name: 'Analisis Risiko & PKPT', href: '/planning/pkpt-generator', icon: ShieldAlert },
+    { name: 'Manajemen Surat Tugas', href: '/penugasan/draf-st', icon: FileText },
+    { name: 'Penyusunan PKA', href: '/penugasan/pka-template', icon: ClipboardList },
+    { name: 'Pelaporan NHP & LHP', href: '/pelaporan', icon: FileCheck },
+    { name: 'Skor Kepatuhan (TLHP)', href: '/monitoring/compliance-score', icon: TrendingUp },
 ];
 
 export default function Sidebar() {
     const pathname = usePathname();
+    const { user } = useAuthStore();
+    const role = user?.role || 'APIP_INTERNAL';
+
+    // Filter menu based on roles in AGENTS.md
+    const visibleMenuItems = MENU_ITEMS.filter((item) => {
+        if (item.href === '/') return true;
+        
+        if (role === 'APIP_INTERNAL') {
+            // Kasubag only has access to Dashboard, Master OPD, Master Auditor, Ingestion, Risk planning, and ST drafting
+            return item.href === '/planning/master-opd' 
+                || item.href === '/planning/master-auditor' 
+                || item.href === '/planning/ingestion' 
+                || item.href === '/planning/pkpt-generator' 
+                || item.href === '/penugasan/draf-st';
+        }
+        
+        if (role === 'APIP_PIMPINAN') {
+            // Inspektur has access to Dashboard, PKPT, ST TTE, Pelaporan, and Compliance Score
+            return item.href === '/planning/pkpt-generator' || item.href === '/penugasan/draf-st' || item.href === '/pelaporan' || item.href === '/monitoring/compliance-score';
+        }
+
+        if (role === 'AUDITOR') {
+            // Auditor has access to PKA Workspace, My Assignments (ST List), Pelaporan, and Compliance Score
+            return item.href === '/penugasan/pka-template' || item.href === '/penugasan/draf-st' || item.href === '/pelaporan' || item.href === '/monitoring/compliance-score';
+        }
+        
+        return false; // Other roles only see Dashboard
+    });
 
     return (
         <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col h-full shadow-xl">
@@ -26,20 +61,25 @@ export default function Sidebar() {
                     Menu Utama
                 </p>
 
-                {MENU_ITEMS.map((item) => {
-                    const isActive = pathname === item.href;
+                {visibleMenuItems.map((item) => {
+                    const isActive = item.href === '/' 
+                        ? pathname === '/' 
+                        : pathname === item.href || pathname.startsWith(item.href + '/');
+                    const displayName = item.href === '/penugasan/draf-st' && role === 'AUDITOR'
+                        ? 'My Assignments'
+                        : item.name;
                     return (
                         <Link key={item.name} href={item.href}>
                             <div
                                 className={cn(
-                                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200",
+                                    "flex items-center gap-3 px-3 py-2.5 rounded-none text-sm font-medium transition-all duration-200",
                                     isActive
-                                        ? "bg-blue-600 text-white shadow-md"
+                                        ? "bg-blue-600 text-white"
                                         : "hover:bg-slate-800 hover:text-white"
                                 )}
                             >
                                 <item.icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400")} />
-                                {item.name}
+                                {displayName}
                             </div>
                         </Link>
                     );

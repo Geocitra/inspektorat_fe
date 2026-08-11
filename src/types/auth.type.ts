@@ -1,6 +1,6 @@
 // src/types/auth.type.ts
 
-export type SystemRole = 'APIP_INTERNAL' | 'APIP_PIMPINAN' | 'AUDITEE_OPD' | 'KEPALA_DAERAH';
+export type SystemRole = 'APIP_INTERNAL' | 'APIP_PIMPINAN' | 'AUDITEE_OPD' | 'KEPALA_DAERAH' | 'AUDITOR';
 
 export interface User {
     id: string;

@@ -9,18 +9,17 @@ export function middleware(request: NextRequest) {
     // Baca rute yang sedang diakses
     const path = request.nextUrl.pathname;
     const isAuthPage = path.startsWith('/login');
-    const isDashboardPage = path.startsWith('/dashboard');
 
-    // SKENARIO 1: Mencoba masuk Dashboard TAPI TIDAK punya token
-    if (isDashboardPage && !token) {
+    // SKENARIO 1: Mencoba masuk rute terproteksi TAPI TIDAK punya token
+    if (!token && !isAuthPage) {
         // Tendang ke halaman Login
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    // SKENARIO 2: Mencoba masuk halaman Login/Home TAPI SUDAH punya token
-    if ((isAuthPage || path === '/') && token) {
-        // Langsung arahkan ke Dashboard (mencegah user login 2 kali)
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+    // SKENARIO 2: Mencoba masuk halaman Login TAPI SUDAH punya token
+    if (token && isAuthPage) {
+        // Langsung arahkan ke Dashboard Utama di root /
+        return NextResponse.redirect(new URL('/', request.url));
     }
 
     // Jika aman, biarkan lewat
@@ -29,5 +28,15 @@ export function middleware(request: NextRequest) {
 
 // Tentukan rute mana saja yang diawasi oleh Satpam ini
 export const config = {
-    matcher: ['/', '/login', '/dashboard/:path*'],
+    matcher: [
+        '/', 
+        '/login', 
+        '/planning/:path*', 
+        '/penugasan/:path*', 
+        '/audit-execution/:path*', 
+        '/pelaporan/:path*', 
+        '/monitoring/:path*', 
+        '/portal/:path*', 
+        '/upload-bukti/:path*'
+    ],
 };

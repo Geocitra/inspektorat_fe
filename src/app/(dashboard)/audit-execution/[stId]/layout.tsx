@@ -7,7 +7,7 @@ import { useStStore } from '@/store/useStStore';
 import { useAuditorStore } from '@/store/useAuditorStore';
 import { AlertCircle, FileText, UserCheck, ShieldAlert, Sparkles, LogIn } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 
 export default function AuditExecutionLayout({
@@ -20,6 +20,7 @@ export default function AuditExecutionLayout({
     const resolvedParams = use(params);
     const { stId } = resolvedParams;
     const pathname = usePathname();
+    const router = useRouter();
 
     const { user } = useAuthStore();
     const { stList } = useStStore();
@@ -81,6 +82,13 @@ export default function AuditExecutionLayout({
     const isKetua = st.ketuaTimId === activeAuditorId;
     const isAnggota = st.anggotaIds.includes(activeAuditorId);
     const isAssigned = isKetua || isAnggota;
+
+    // Redirect Ketua Tim away from /upload page
+    useEffect(() => {
+        if (isAssigned && isKetua && pathname.endsWith('/upload')) {
+            router.replace(`/audit-execution/${stId}/review?role=auditor&type=ketua`);
+        }
+    }, [isAssigned, isKetua, pathname, stId, router]);
 
     const isSystemAuditor = activeRole === 'AUDITOR';
 
@@ -167,16 +175,18 @@ export default function AuditExecutionLayout({
 
             {/* TAB MENU WORKSPACE */}
             <div className="flex border-b border-slate-200 bg-slate-50">
-                <Link
-                    href={uploadHref}
-                    className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
-                        pathname.endsWith('/upload')
-                            ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
-                            : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                >
-                    1. Upload SPJ
-                </Link>
+                {!isKetua && (
+                    <Link
+                        href={uploadHref}
+                        className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
+                            pathname.endsWith('/upload')
+                                ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
+                                : 'text-slate-650 hover:bg-slate-100'
+                        }`}
+                    >
+                        1. Upload SPJ
+                    </Link>
+                )}
                 <Link
                     href={analysisHref}
                     className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${

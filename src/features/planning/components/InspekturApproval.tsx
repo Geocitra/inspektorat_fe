@@ -106,7 +106,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                     </div>
                 )}
 
-                {draftAgendas.length > 0 && status === 'DRAFT' && (
+                {draftAgendas.length > 0 && status === 'DRAF' && (
                     <div className="border border-slate-200 bg-slate-50 p-4 text-center rounded-none space-y-2">
                         <AlertCircle className="w-8 h-8 text-slate-400 mx-auto" />
                         <h4 className="text-xs font-bold text-slate-700">Menunggu Pengajuan Draf</h4>
@@ -116,15 +116,15 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                     </div>
                 )}
 
-                {/* PENDING APPROVAL VIEW */}
-                {status === 'PENDING_APPROVAL' && (
+                 {/* PENDING APPROVAL VIEW */}
+                {status === 'MENUNGGU_PERSETUJUAN' && (
                     <div className="space-y-4">
                         <div className="border border-amber-200 bg-amber-50/20 p-4 rounded-none flex items-start gap-3">
                             <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                             <div>
                                 <h4 className="text-xs font-bold text-amber-800">Menunggu Pengesahan Dokumen</h4>
                                 <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-                                    Draf PKPT telah diajukan. Tinjau dokumen secara menyeluruh. Sebagai Inspektur, Anda dapat membubuhkan **Tanda Tangan Elektronik (TTE)** untuk mensahkan atau **Menolak** draf jika diperlukan revisi anggaran.
+                                    Draf PKPT telah diajukan. Tinjau dokumen secara menyeluruh. Sebagai Inspektur, Anda dapat membubuhkan **Tanda Tangan Elektronik (TTE)** untuk mensahkan or **Menolak** draf jika diperlukan revisi anggaran.
                                 </p>
                             </div>
                         </div>
@@ -176,7 +176,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                 )}
 
                 {/* SECURE SIGNATURE HASH */}
-                {status === 'PUBLISHED' && tteHash && (
+                {status === 'DISETUJUI' && tteHash && (
                     <div className="border-2 border-emerald-600 bg-emerald-50/30 p-5 rounded-none text-slate-800 space-y-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="space-y-1">
                             <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">

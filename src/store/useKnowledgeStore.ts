@@ -1,142 +1,154 @@
 // src/store/useKnowledgeStore.ts
 import { create } from 'zustand';
 import { toast } from 'sonner';
-
-export type IngestionStatus = 'Uploading' | 'Parsing' | 'Semantic Chunking' | 'Vectorizing' | 'Success' | 'Error';
-
-export interface KnowledgeDoc {
-    id: string;
-    fileName: string;
-    fileSize: string;
-    category: 'SOP Audit' | 'Peraturan Daerah' | 'SSH';
-    uploadDate: string;
-    status: IngestionStatus;
-    progress: number;
-}
+import { api } from '@/lib/api';
+import { KnowledgeDoc, DocumentType } from '@/types/knowledge.type';
 
 interface KnowledgeState {
     docList: KnowledgeDoc[];
     isProcessing: boolean;
     currentDoc: KnowledgeDoc | null;
-    uploadDocument: (file: { name: string; size: number }, category: 'SOP Audit' | 'Peraturan Daerah' | 'SSH') => void;
-    deleteDocument: (id: string) => void;
+    isLoadingDocs: boolean;
+
+    fetchDocuments: () => Promise<void>;
+    uploadDocument: (file: File, type: DocumentType, title: string) => Promise<void>;
+    deleteDocument: (id: string) => Promise<void>;
     clearCurrentDoc: () => void;
 }
 
-const INITIAL_DOCS: KnowledgeDoc[] = [
-    {
-        id: 'doc-1',
-        fileName: 'SOP_Audit_Kinerja_Inspektorat_2025.pdf',
-        fileSize: '1.2 MB',
-        category: 'SOP Audit',
-        uploadDate: new Date('2026-03-01T10:00:00Z').toLocaleString('id-ID'),
-        status: 'Success',
-        progress: 100
-    },
-    {
-        id: 'doc-2',
-        fileName: 'Perda_No_4_Tahun_2024_APBD_Surabaya.pdf',
-        fileSize: '4.5 MB',
-        category: 'Peraturan Daerah',
-        uploadDate: new Date('2026-03-05T14:30:00Z').toLocaleString('id-ID'),
-        status: 'Success',
-        progress: 100
-    },
-    {
-        id: 'doc-3',
-        fileName: 'Standar_Satuan_Harga_SSH_Barang_2026.docx',
-        fileSize: '820 KB',
-        category: 'SSH',
-        uploadDate: new Date('2026-03-10T11:15:00Z').toLocaleString('id-ID'),
-        status: 'Success',
-        progress: 100
-    }
-];
-
 export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
-    docList: INITIAL_DOCS,
+    docList: [],
     isProcessing: false,
     currentDoc: null,
+    isLoadingDocs: false,
 
-    uploadDocument: (file, category) => {
-        // Konversi ukuran byte ke MB/KB
-        const sizeStr = file.size > 1024 * 1024 
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB` 
-            : `${(file.size / 1024).toFixed(0)} KB`;
-
-        const newId = `doc-${Date.now()}`;
-        const newDoc: KnowledgeDoc = {
-            id: newId,
-            fileName: file.name,
-            fileSize: sizeStr,
-            category: category,
-            uploadDate: new Date().toLocaleString('id-ID'),
-            status: 'Uploading',
-            progress: 0
-        };
-
-        set({ 
-            isProcessing: true,
-            currentDoc: newDoc,
-            // Belum masuk ke list utama sebelum selesai (atau masuk list utama tapi status processing)
-            docList: [newDoc, ...get().docList]
-        });
-
-        // Jalankan Simulasi Pipeline Ingesti AI
-        let currentProgress = 0;
-        const intervalTime = 800; // 800ms per step
-
-        const interval = setInterval(() => {
-            currentProgress += 10;
-            
-            let status: IngestionStatus = 'Uploading';
-            if (currentProgress >= 25 && currentProgress < 50) {
-                status = 'Parsing';
-            } else if (currentProgress >= 50 && currentProgress < 75) {
-                status = 'Semantic Chunking';
-            } else if (currentProgress >= 75 && currentProgress < 100) {
-                status = 'Vectorizing';
-            } else if (currentProgress >= 100) {
-                status = 'Success';
-                currentProgress = 100;
-                clearInterval(interval);
-            }
-
-            // Update status & progress di store
-            set((state) => {
-                const updatedList = state.docList.map((doc) => {
-                    if (doc.id === newId) {
-                        return { ...doc, progress: currentProgress, status };
-                    }
-                    return doc;
-                });
-
-                const updatedCurrentDoc = state.currentDoc?.id === newId 
-                    ? { ...state.currentDoc, progress: currentProgress, status } 
-                    : state.currentDoc;
-
-                return {
-                    docList: updatedList,
-                    currentDoc: updatedCurrentDoc,
-                    isProcessing: currentProgress < 100
-                };
+    // Mengambil data nyata dari PostgreSQL
+    fetchDocuments: async () => {
+        set({ isLoadingDocs: true });
+        try {
+            const response = await api.get('/documents');
+            set({ docList: response.data.data, isLoadingDocs: false });
+        } catch (error: any) {
+            toast.error('Gagal Memuat Data', {
+                description: error.response?.data?.message || 'Tidak dapat terhubung ke server database.',
             });
-
-            // Tampilkan notifikasi jika sukses
-            if (status === 'Success') {
-                toast.success('Ingesti AI Berhasil', {
-                    description: 'Data telah tersimpan di Database Vektor dan siap menjadi referensi AI',
-                    duration: 5000
-                });
-            }
-        }, intervalTime);
+            set({ isLoadingDocs: false });
+        }
     },
 
-    deleteDocument: (id) => {
-        set((state) => ({
-            docList: state.docList.filter((doc) => doc.id !== id),
-            currentDoc: state.currentDoc?.id === id ? null : state.currentDoc
-        }));
+    uploadDocument: async (file: File, type: DocumentType, title: string) => {
+        const tempId = `temp-${Date.now()}`;
+        const tempDoc: KnowledgeDoc = {
+            id: tempId,
+            title: title,
+            type: type,
+            status: 'Uploading',
+            filePath: '',
+            createdAt: new Date().toISOString(),
+            progress: 0,
+            metadata: {
+                id: '',
+                fileSize: file.size,
+                mimeType: file.type,
+                totalChunks: 0,
+                hash: ''
+            }
+        };
+
+        set({ isProcessing: true, currentDoc: tempDoc });
+
+        try {
+            // 1. Eksekusi Pengiriman Fisik ke Endpoint Backend
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', type);
+            formData.append('title', title);
+
+            const res = await api.post('/documents/ingest', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            // Backend akan mengembalikan 'hash' sebagai identitas unik file yang diantrekan
+            const expectedHash = res.data.data?.hash;
+
+            // 2. Simulasi Progress Bar Kosmetik (Tertahan di 90% jika DB belum merespons)
+            let currentProgress = 0;
+            const visualInterval = setInterval(() => {
+                currentProgress += Math.floor(Math.random() * 15) + 5; // Naik random 5-20%
+                if (currentProgress > 90) currentProgress = 90; // Limit maksimum 90%
+
+                let status: any = 'Parsing';
+                if (currentProgress >= 60) status = 'Vectorizing';
+
+                set({ currentDoc: { ...get().currentDoc!, progress: currentProgress, status } });
+            }, 1000);
+
+            // 3. Short-Polling: Mengecek status riil dari Backend (tiap 3 detik)
+            const pollInterval = setInterval(async () => {
+                try {
+                    const listRes = await api.get('/documents');
+                    const docs = listRes.data.data;
+
+                    // Mencari dokumen kita di database menggunakan hash biner-nya
+                    const foundDoc = docs.find((d: any) => d.metadata?.hash === expectedHash);
+
+                    // Jika AI Worker (BullMQ) sudah menanamkannya ke PostgreSQL
+                    if (foundDoc && foundDoc.status === 'AKTIF') {
+                        clearInterval(visualInterval);
+                        clearInterval(pollInterval);
+
+                        set({
+                            isProcessing: false,
+                            docList: docs, // Sinkronisasi tabel UI langsung
+                            currentDoc: { ...get().currentDoc!, progress: 100, status: 'Success' }
+                        });
+
+                        toast.success('Ingesti AI Selesai', {
+                            description: 'Berkas telah selesai dipotong dan disisipkan ke Vector DB (pgvector).',
+                        });
+                    }
+                } catch (pollError) {
+                    console.error('Terjadi gangguan saat memantau status RAG.', pollError);
+                }
+            }, 3000);
+
+            // 4. Pengaman Timeout (Batas waktu toleransi worker AI: 2 Menit)
+            setTimeout(() => {
+                if (get().isProcessing) {
+                    clearInterval(visualInterval);
+                    clearInterval(pollInterval);
+                    set({ isProcessing: false, currentDoc: { ...get().currentDoc!, status: 'Error' } });
+                    toast.error('Waktu Tunggu Habis (Timeout)', {
+                        description: 'Server AI membutuhkan waktu terlalu lama. Dokumen mungkin masih diproses di latar belakang.',
+                    });
+                }
+            }, 120000);
+
+        } catch (error: any) {
+            set({ isProcessing: false, currentDoc: null });
+            toast.error('Gagal Mengunggah Dokumen', {
+                description: error.response?.data?.message || 'Terjadi kesalahan sistem (kemungkinan timeout API).',
+            });
+        }
+    },
+
+    deleteDocument: async (id: string) => {
+        try {
+            await api.delete(`/documents/${id}`);
+
+            set((state) => ({
+                docList: state.docList.filter((doc) => doc.id !== id),
+                currentDoc: state.currentDoc?.id === id ? null : state.currentDoc
+            }));
+
+            toast.success('Dokumen Terhapus', {
+                description: 'Berkas fisik dan Vektor AI berhasil dihapus secara permanen.'
+            });
+        } catch (error: any) {
+            toast.error('Gagal Menghapus Dokumen', {
+                description: error.response?.data?.message || 'Terjadi kesalahan saat menghapus data.',
+            });
+        }
     },
 
     clearCurrentDoc: () => {

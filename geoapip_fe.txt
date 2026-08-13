@@ -1823,11 +1823,13 @@ import InspekturApproval from '@/features/planning/components/InspekturApproval'
 export default function PkptGeneratorPage() {
 
     const { opdList } = useOpdStore();
-    const { status, syncWithOpdList } = usePkptStore();
+    const { status, syncWithOpdList, fetchActivePkpt, fetchRiskRanking } = usePkptStore();
 
     useEffect(() => {
         syncWithOpdList(opdList);
-    }, [opdList, syncWithOpdList]);
+        fetchActivePkpt(2026);
+        fetchRiskRanking(2026);
+    }, [opdList, syncWithOpdList, fetchActivePkpt, fetchRiskRanking]);
 
     const { user } = useAuthStore();
     const [activeRole, setActiveRole] = useState<'APIP_INTERNAL' | 'APIP_PIMPINAN'>('APIP_INTERNAL');
@@ -1894,14 +1896,14 @@ export default function PkptGeneratorPage() {
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500 font-semibold">Status Dokumen:</span>
                         <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 border rounded-none ${
-                            status === 'PUBLISHED'
+                            status === 'DISETUJUI'
                                 ? 'bg-green-50 text-green-700 border-green-200'
-                                : status === 'PENDING_APPROVAL'
+                                : status === 'MENUNGGU_PERSETUJUAN'
                                 ? 'bg-amber-50 text-amber-700 border-amber-200'
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                            {status === 'PUBLISHED' ? <ShieldCheck className="w-3.5 h-3.5 text-green-600" /> : null}
-                            {status === 'PUBLISHED' ? 'PUBLISHED' : status === 'PENDING_APPROVAL' ? 'PENDING APPROVAL' : 'DRAFT'}
+                            {status === 'DISETUJUI' ? <ShieldCheck className="w-3.5 h-3.5 text-green-600" /> : null}
+                            {status === 'DISETUJUI' ? 'PUBLISHED' : status === 'MENUNGGU_PERSETUJUAN' ? 'PENDING APPROVAL' : 'DRAFT'}
                         </span>
                     </div>
                 </div>
@@ -4434,13 +4436,14 @@ export default function IrbanVerifier({ stId }: IrbanVerifierProps) {
 
 'use client';
 
-import { useTlhpStore, TlhpItem } from '@/store/useTlhpStore';
+import { useTlhpStore } from '@/store/useTlhpStore';
 import {
-    FileText, Image, Upload, AlertCircle, CheckCircle2, ShieldAlert, MapPin, Loader2, Info
+    FileText, Image as ImageIcon, Upload, AlertCircle, CheckCircle2, ShieldAlert, MapPin, Loader2, Info, Eye
 } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 interface TlhpUploadPortalProps {
     stId: string;
@@ -4455,6 +4458,7 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
 
     const handleUploadPdf = (itemId: string) => {
         uploadDokumenBukti(itemId, 'BUKTI_SETORAN_NEGARA_DINAS_PENDIDIKAN.pdf');
+        toast.success('Bukti Setoran Diunggah', { description: 'Berkas BUKTI_SETORAN_NEGARA_DINAS_PENDIDIKAN.pdf berhasil ditautkan.' });
     };
 
     const handleUploadFoto = async (itemId: string, hasGps: boolean, isFar: boolean = false) => {
@@ -4476,7 +4480,6 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
             customCoords
         );
 
-        setIsUploadingId(itemId);
         setIsUploadingId(null);
     };
 
@@ -4547,20 +4550,52 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
 
                             {}
                             {(item.buktiFile || item.buktiFoto) && (
-                                <div className="bg-slate-50 border border-slate-150 p-3 rounded-none text-xs space-y-2">
+                                <div className="bg-slate-50 border border-slate-155 p-3 rounded-none text-xs space-y-2">
                                     <p className="font-bold text-slate-700">Bukti yang telah diunggah:</p>
+
                                     {item.buktiFile && (
-                                        <p className="text-slate-600 flex items-center gap-1">
-                                            <FileText className="w-3.5 h-3.5 text-red-500" />
-                                            {item.buktiFile}
-                                        </p>
+                                        <div className="text-slate-600 flex items-center justify-between gap-2 border-b border-slate-200/50 pb-1.5">
+                                            <span className="flex items-center gap-1">
+                                                <FileText className="w-3.5 h-3.5 text-red-500" />
+                                                {item.buktiFile}
+                                            </span>
+                                            <Dialog>
+                                                <DialogTrigger className="p-0 h-auto text-[10px] font-bold text-blue-600 flex items-center gap-1 bg-transparent hover:underline">
+                                                    <Eye className="w-3 h-3" /> Lihat Dokumen
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-4xl h-[700px] rounded-none">
+                                                    <DialogHeader>
+                                                        <DialogTitle className="text-xs font-bold uppercase tracking-wider">
+                                                            Dokumen Bukti Tindak Lanjut: {item.buktiFile}
+                                                        </DialogTitle>
+                                                    </DialogHeader>
+                                                    <iframe src="https://pdfobject.com/pdf/sample.pdf" className="w-full h-full border border-slate-200 mt-2" />
+                                                </DialogContent>
+                                            </Dialog>
+                                        </div>
                                     )}
+
                                     {item.buktiFoto && (
                                         <div className="space-y-1.5">
-                                            <p className="text-slate-600 flex items-center gap-1">
-                                                <Image className="w-3.5 h-3.5 text-blue-500" />
-                                                {item.buktiFoto}
-                                            </p>
+                                            <div className="text-slate-600 flex items-center justify-between gap-2 border-b border-slate-200/50 pb-1.5">
+                                                <span className="flex items-center gap-1">
+                                                    <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
+                                                    {item.buktiFoto}
+                                                </span>
+                                                <Dialog>
+                                                    <DialogTrigger className="p-0 h-auto text-[10px] font-bold text-blue-600 flex items-center gap-1 bg-transparent hover:underline">
+                                                        <Eye className="w-3 h-3" /> Lihat Foto
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-3xl rounded-none">
+                                                        <DialogHeader>
+                                                            <DialogTitle className="text-xs font-bold uppercase tracking-wider">
+                                                                Foto Bukti Fisik Lapangan: {item.buktiFoto}
+                                                            </DialogTitle>
+                                                        </DialogHeader>
+                                                        <img src="https://picsum.photos/800/600" alt="Bukti Foto" className="w-full max-h-[500px] object-contain border border-slate-200 mt-2" />
+                                                    </DialogContent>
+                                                </Dialog>
+                                            </div>
                                             {item.buktiCoords && (
                                                 <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
                                                     <MapPin className="w-3 h-3 text-slate-400" />
@@ -4615,7 +4650,7 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
                                     ) : (
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-slate-750 flex items-center gap-1">
-                                                <Upload className="w-3.5 h-3.5 text-blue-650" />
+                                                <Upload className="w-3.5 h-3.5 text-blue-655" />
                                                 Unggah Dokumen Berkas PDF (Bukti Setoran)
                                             </label>
                                             <Button
@@ -4639,7 +4674,7 @@ export default function TlhpUploadPortal({ stId }: TlhpUploadPortalProps) {
 
 function LockPlaceholderIcon() {
     return (
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-6 h-6 text-indigo-750">
+        <svg xmlns="http://www.w3.org/2050/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-6 h-6 text-indigo-750">
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
         </svg>
@@ -5186,132 +5221,147 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                             />
                         </div>
 
-                        {}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-t border-slate-100 pt-4">
-
                             {}
-                            <div className="space-y-4">
-                                {}
-                                <FormField
-                                    control={form.control}
-                                    name="pengawasTeknisId"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-slate-700">Pengawas Teknis (PT)</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger className={`rounded-none text-xs focus:border-blue-500 ${pengawasConflict ? 'border-red-500' : 'border-slate-200'}`}>
-                                                        <SelectValue placeholder="Pilih Pengawas Teknis" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent className="rounded-none">
-                                                    {auditorList.map(aud => (
-                                                        <SelectItem key={aud.id} value={aud.id} className="text-xs">
-                                                            {aud.nama}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                {pengawasConflict && (
-                                    <div className="flex items-center gap-1 text-[11px] text-red-650 font-bold bg-red-50 p-2 border border-red-200">
-                                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                                        <span>Pengawas Teknis memiliki bentrok jadwal di tanggal tersebut!</span>
-                                    </div>
-                                )}
+                            <div className="col-span-1 sm:col-span-2 space-y-4 border-t border-slate-100 pt-4">
+                                <div>
+                                    <Label className="text-xs font-bold text-slate-800 uppercase tracking-wider">Susun Tim Auditor (Socio-Selection)</Label>
+                                    <p className="text-[10px] text-slate-450 mt-0.5">
+                                        Klik tombol peran (**PJ** untuk Pengawas, **KT** untuk Ketua, **AT** untuk Anggota) pada kartu masing-masing auditor untuk menetapkan peran mereka dalam tim pengawasan ini.
+                                    </p>
+                                </div>
 
-                                {}
-                                <FormField
-                                    control={form.control}
-                                    name="ketuaTimId"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-slate-700">Ketua Tim Audit</FormLabel>
-                                            <Select onValueChange={field.onChange} value={field.value}>
-                                                <FormControl>
-                                                    <SelectTrigger className={`rounded-none text-xs focus:border-blue-500 ${ketuaConflict ? 'border-red-500' : 'border-slate-200'}`}>
-                                                        <SelectValue placeholder="Pilih Ketua Tim" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent className="rounded-none">
-                                                    {auditorList
-                                                        .filter(aud => aud.id !== pengawasTeknisId)
-                                                        .map(aud => (
-                                                            <SelectItem key={aud.id} value={aud.id} className="text-xs">
-                                                                {aud.nama}
-                                                            </SelectItem>
-                                                        ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                                {ketuaConflict && (
-                                    <div className="flex items-center gap-1 text-[11px] text-red-650 font-bold bg-red-50 p-2 border border-red-200">
-                                        <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                                        <span>Ketua Tim memiliki bentrok jadwal di tanggal tersebut!</span>
-                                    </div>
-                                )}
-                            </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                                    {auditorList.map(aud => {
+                                        const isPT = pengawasTeknisId === aud.id;
+                                        const isKT = ketuaTimId === aud.id;
+                                        const isAT = anggotaIds.includes(aud.id);
+                                        const hasConflict = checkAuditorConflict(aud.id, tglMulai, tglSelesai);
 
-                            {}
-                            <div className="space-y-2">
-                                <Label className="text-xs font-semibold text-slate-700">Anggota Tim Audit (Pilih Minimal 1)</Label>
-                                <div className="border border-slate-200 p-3 bg-slate-50/50 max-h-48 overflow-y-auto space-y-2.5 rounded-none">
-                                    {auditorList
-                                        .filter(aud => aud.id !== ketuaTimId && aud.id !== pengawasTeknisId)
-                                        .map(aud => {
-                                            const isChecked = anggotaIds.includes(aud.id);
-                                            const hasConflict = conflictedAnggotaMap[aud.id];
+                                        const expertise = (aud.jabatan || '').includes('Madya')
+                                            ? ['CFrA', 'Investigasi']
+                                            : (aud.jabatan || '').includes('Muda')
+                                            ? ['Akuntan', 'CA']
+                                            : ['CISA', 'Audit IT'];
 
-                                            return (
-                                                <div key={aud.id} className="flex items-start gap-2.5">
-                                                    <input
-                                                        type="checkbox"
-                                                        id={`anggota-${aud.id}`}
-                                                        checked={isChecked}
-                                                        onChange={(e) => {
-                                                            if (e.target.checked) {
-                                                                form.setValue('anggotaIds', [...anggotaIds, aud.id]);
-                                                            } else {
-                                                                form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
-                                                            }
-                                                        }}
-                                                        className="w-3.5 h-3.5 border-slate-300 text-blue-600 focus:ring-blue-500 mt-1 cursor-pointer"
-                                                    />
-                                                    <div className="leading-none space-y-1">
-                                                        <label
-                                                            htmlFor={`anggota-${aud.id}`}
-                                                            className={`text-xs font-semibold cursor-pointer ${hasConflict ? 'text-red-655' : 'text-slate-800'}`}
-                                                        >
-                                                            {aud.nama}
-                                                        </label>
-                                                        <p className="text-[10px] text-slate-400">NIP. {aud.nip}</p>
-                                                        {isChecked && hasConflict && (
-                                                            <span className="inline-block text-[9px] text-red-650 font-bold bg-red-50 px-1.5 py-0.5 border border-red-200 mt-1">
-                                                                Bentrok Jadwal!
+                                        return (
+                                            <div
+                                                key={aud.id}
+                                                className={`border p-3.5 flex flex-col justify-between space-y-3 transition-all rounded-none ${
+                                                    isPT ? 'border-blue-600 bg-blue-50/10 ring-1 ring-blue-500' :
+                                                    isKT ? 'border-amber-600 bg-amber-50/10 ring-1 ring-amber-500' :
+                                                    isAT ? 'border-emerald-600 bg-emerald-50/10 ring-1 ring-emerald-500' :
+                                                    'border-slate-200 bg-white hover:bg-slate-50'
+                                                }`}
+                                            >
+                                                {}
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex gap-2 items-center">
+                                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-xs text-slate-650 shrink-0">
+                                                            {aud.nama.substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div className="leading-tight">
+                                                            <h4 className="text-xs font-bold text-slate-800">{aud.nama}</h4>
+                                                            <p className="text-[9px] text-slate-400">NIP. {aud.nip}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`w-2 h-2 rounded-full ${hasConflict ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`} title={hasConflict ? 'Bentrok Jadwal' : 'Tersedia'} />
+                                                </div>
+
+                                                {}
+                                                <div className="space-y-1.5">
+                                                    <p className="text-[9px] text-slate-450 font-semibold">{aud.jabatan || 'Auditor Ahli'}</p>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {expertise.map(exp => (
+                                                            <span key={exp} className="text-[8px] font-bold px-1.5 py-0.5 bg-slate-100 text-slate-600 rounded">
+                                                                {exp}
                                                             </span>
-                                                        )}
+                                                        ))}
+                                                        {isPT && <span className="text-[8px] font-bold px-1.5 py-0.5 bg-blue-600 text-white rounded">Pengawas (PT)</span>}
+                                                        {isKT && <span className="text-[8px] font-bold px-1.5 py-0.5 bg-amber-600 text-white rounded">Ketua (KT)</span>}
+                                                        {isAT && <span className="text-[8px] font-bold px-1.5 py-0.5 bg-emerald-600 text-white rounded">Anggota (AT)</span>}
                                                     </div>
                                                 </div>
-                                            );
-                                        })}
+
+                                                {}
+                                                <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-100">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            if (isPT) {
+                                                                form.setValue('pengawasTeknisId', '');
+                                                            } else {
+                                                                form.setValue('pengawasTeknisId', aud.id);
+                                                                if (isKT) form.setValue('ketuaTimId', '');
+                                                                if (isAT) form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
+                                                            }
+                                                        }}
+                                                        className={`h-6 text-[9px] font-bold rounded-none p-0 ${
+                                                            isPT ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-550 hover:bg-blue-50 hover:text-blue-650'
+                                                        }`}
+                                                    >
+                                                        PJ
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            if (isKT) {
+                                                                form.setValue('ketuaTimId', '');
+                                                            } else {
+                                                                form.setValue('ketuaTimId', aud.id);
+                                                                if (isPT) form.setValue('pengawasTeknisId', '');
+                                                                if (isAT) form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
+                                                            }
+                                                        }}
+                                                        className={`h-6 text-[9px] font-bold rounded-none p-0 ${
+                                                            isKT ? 'bg-amber-600 text-white hover:bg-amber-700' : 'text-slate-550 hover:bg-amber-50 hover:text-amber-650'
+                                                        }`}
+                                                    >
+                                                        KT
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        onClick={() => {
+                                                            if (isAT) {
+                                                                form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
+                                                            } else {
+                                                                form.setValue('anggotaIds', [...anggotaIds, aud.id]);
+                                                                if (isPT) form.setValue('pengawasTeknisId', '');
+                                                                if (isKT) form.setValue('ketuaTimId', '');
+                                                            }
+                                                        }}
+                                                        className={`h-6 text-[9px] font-bold rounded-none p-0 ${
+                                                            isAT ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-slate-550 hover:bg-emerald-50 hover:text-emerald-650'
+                                                        }`}
+                                                    >
+                                                        AT
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <FormField
-                                    control={form.control}
-                                    name="anggotaIds"
-                                    render={() => (
-                                        <FormItem>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
+
+                                <div className="flex gap-2">
+                                    <FormField
+                                        control={form.control}
+                                        name="pengawasTeknisId"
+                                        render={() => <FormMessage className="text-[10px]" />}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="ketuaTimId"
+                                        render={() => <FormMessage className="text-[10px]" />}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="anggotaIds"
+                                        render={() => <FormMessage className="text-[10px]" />}
+                                    />
+                                </div>
                             </div>
-                        </div>
 
                         <div className="pt-3 border-t border-slate-100 flex justify-end">
                             <Button
@@ -5790,9 +5840,9 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
     return (
         <div className="space-y-6">
             {}
-            {rejectionReason && status === 'DRAFT' && (
+            {rejectionReason && status === 'DRAF' && (
                 <div className="border border-red-200 bg-red-50/50 p-4 rounded-none flex items-start gap-3">
-                    <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                     <div>
                         <h4 className="text-xs font-bold text-red-800">Usulan PKPT Ditolak & Perlu Revisi</h4>
                         <p className="text-red-700 text-xs mt-1 font-semibold leading-relaxed">
@@ -5802,9 +5852,9 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                 </div>
             )}
 
-            {status !== 'DRAFT' && (
+            {status !== 'DRAF' && (
                 <div className="border border-amber-200 bg-amber-50/30 p-4 rounded-none flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                     <div>
                         <h4 className="text-xs font-bold text-amber-800">Draf Dikunci</h4>
                         <p className="text-slate-500 text-xs mt-1">
@@ -5822,10 +5872,10 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                         <p className="text-slate-400 text-[11px] mt-0.5">Penyusunan draf audit daerah berbasis AI RAG.</p>
                     </div>
 
-                    {status === 'DRAFT' && (
+                    {status === 'DRAF' && (
                         isKasubag ? (
                             <Button
-                                onClick={generateAiPkpt}
+                                onClick={() => generateAiPkpt(2026)}
                                 disabled={isGenerating}
                                 className="bg-blue-600 hover:bg-blue-700 text-xs rounded-none shadow-none"
                             >
@@ -5862,10 +5912,10 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                 <TableHeader className="bg-slate-50 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent border-b border-slate-200">
                                         <TableHead className="font-bold text-slate-700 text-xs">Program Audit</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[220px]">Objek Pemeriksaan (OPD)</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[140px]">Alokasi Waktu</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[160px]">Anggaran Audit (Rp)</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[100px]">Prioritas</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-55">Objek Pemeriksaan (OPD)</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-35">Alokasi Waktu</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-40">Anggaran Audit (Rp)</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-25">Prioritas</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -5874,31 +5924,31 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                             <TableCell className="p-2">
                                                 <Input
                                                     value={agenda.namaAudit}
-                                                    disabled={status !== 'DRAFT' || !isKasubag}
+                                                    disabled={status !== 'DRAF' || !isKasubag}
                                                     onChange={(e) => updateAgenda(agenda.id, { namaAudit: e.target.value })}
                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                />
-                                            </TableCell>
-                                            <TableCell className="text-xs text-slate-600 font-medium">
-                                                {agenda.namaOpd}
-                                            </TableCell>
-                                            <TableCell className="p-2">
-                                                <Input
-                                                    value={agenda.alokasiWaktu}
-                                                    disabled={status !== 'DRAFT' || !isKasubag}
-                                                    onChange={(e) => updateAgenda(agenda.id, { alokasiWaktu: e.target.value })}
-                                                    className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                />
-                                            </TableCell>
-                                            <TableCell className="p-2">
-                                                <Input
-                                                    type="number"
-                                                    value={agenda.anggaran}
-                                                    disabled={status !== 'DRAFT' || !isKasubag}
-                                                    onChange={(e) => updateAgenda(agenda.id, { anggaran: Number(e.target.value) })}
-                                                    className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono font-semibold text-slate-700 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                />
-                                            </TableCell>
+                                                 />
+                                             </TableCell>
+                                             <TableCell className="text-xs text-slate-600 font-medium">
+                                                 {agenda.namaOpd}
+                                             </TableCell>
+                                             <TableCell className="p-2">
+                                                 <Input
+                                                     value={agenda.alokasiWaktu}
+                                                     disabled={status !== 'DRAF' || !isKasubag}
+                                                     onChange={(e) => updateAgenda(agenda.id, { alokasiWaktu: e.target.value })}
+                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
+                                                 />
+                                             </TableCell>
+                                             <TableCell className="p-2">
+                                                 <Input
+                                                     type="number"
+                                                     value={agenda.anggaran}
+                                                     disabled={status !== 'DRAF' || !isKasubag}
+                                                     onChange={(e) => updateAgenda(agenda.id, { anggaran: Number(e.target.value) })}
+                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono font-semibold text-slate-700 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
+                                                 />
+                                             </TableCell>
                                             <TableCell>
                                                 <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 border rounded-none ${
                                                     agenda.prioritas === 'Tinggi'
@@ -5917,7 +5967,7 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                         </div>
 
                         {}
-                        {status === 'DRAFT' && isKasubag && (
+                        {status === 'DRAF' && isKasubag && (
                             <div className="flex justify-end pt-2 border-t border-slate-100">
                                 <Button
                                     onClick={() => {
@@ -6549,7 +6599,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                     </div>
                 )}
 
-                {draftAgendas.length > 0 && status === 'DRAFT' && (
+                {draftAgendas.length > 0 && status === 'DRAF' && (
                     <div className="border border-slate-200 bg-slate-50 p-4 text-center rounded-none space-y-2">
                         <AlertCircle className="w-8 h-8 text-slate-400 mx-auto" />
                         <h4 className="text-xs font-bold text-slate-700">Menunggu Pengajuan Draf</h4>
@@ -6559,15 +6609,15 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                     </div>
                 )}
 
-                {}
-                {status === 'PENDING_APPROVAL' && (
+                 {}
+                {status === 'MENUNGGU_PERSETUJUAN' && (
                     <div className="space-y-4">
                         <div className="border border-amber-200 bg-amber-50/20 p-4 rounded-none flex items-start gap-3">
                             <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
                             <div>
                                 <h4 className="text-xs font-bold text-amber-800">Menunggu Pengesahan Dokumen</h4>
                                 <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-                                    Draf PKPT telah diajukan. Tinjau dokumen secara menyeluruh. Sebagai Inspektur, Anda dapat membubuhkan **Tanda Tangan Elektronik (TTE)** untuk mensahkan atau **Menolak** draf jika diperlukan revisi anggaran.
+                                    Draf PKPT telah diajukan. Tinjau dokumen secara menyeluruh. Sebagai Inspektur, Anda dapat membubuhkan **Tanda Tangan Elektronik (TTE)** untuk mensahkan or **Menolak** draf jika diperlukan revisi anggaran.
                                 </p>
                             </div>
                         </div>
@@ -6619,7 +6669,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                 )}
 
                 {}
-                {status === 'PUBLISHED' && tteHash && (
+                {status === 'DISETUJUI' && tteHash && (
                     <div className="border-2 border-emerald-600 bg-emerald-50/30 p-5 rounded-none text-slate-800 space-y-3 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="space-y-1">
                             <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-widest flex items-center gap-1.5">
@@ -6731,11 +6781,12 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
 
 'use client';
 
-import { useState, useRef } from 'react';
-import { useKnowledgeStore, KnowledgeDoc } from '@/store/useKnowledgeStore';
+import { useState, useRef, useEffect } from 'react';
+import { useKnowledgeStore } from '@/store/useKnowledgeStore';
+import { DocumentType, KnowledgeDoc } from '@/types/knowledge.type';
 import {
     UploadCloud, FileText, Trash2, CheckCircle, Brain, RefreshCw,
-    AlertCircle, Database, HelpCircle, HardDrive, Cpu, Zap, BookOpen, Check
+    AlertCircle, Database, HardDrive, Cpu, Zap, BookOpen, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -6743,10 +6794,18 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 export default function KnowledgeBaseDashboard() {
-    const { docList, isProcessing, currentDoc, uploadDocument, deleteDocument, clearCurrentDoc } = useKnowledgeStore();
-    const [category, setCategory] = useState<'SOP Audit' | 'Peraturan Daerah' | 'SSH'>('SOP Audit');
+    const {
+        docList, isProcessing, currentDoc, isLoadingDocs,
+        fetchDocuments, uploadDocument, deleteDocument, clearCurrentDoc
+    } = useKnowledgeStore();
+
+    const [uiCategory, setUiCategory] = useState<'SOP Audit' | 'Peraturan Daerah' | 'SSH'>('SOP Audit');
     const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        fetchDocuments();
+    }, [fetchDocuments]);
 
     const handleDrag = (e: React.DragEvent) => {
         e.preventDefault();
@@ -6764,8 +6823,7 @@ export default function KnowledgeBaseDashboard() {
         setDragActive(false);
 
         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            const file = e.dataTransfer.files[0];
-            await processUploadedFile(file);
+            await processUploadedFile(e.dataTransfer.files[0]);
         }
     };
 
@@ -6775,13 +6833,11 @@ export default function KnowledgeBaseDashboard() {
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            const file = e.target.files[0];
-            await processUploadedFile(file);
+            await processUploadedFile(e.target.files[0]);
         }
     };
 
     const processUploadedFile = async (file: File) => {
-
         const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
         const fileExtension = file.name.split('.').pop()?.toLowerCase();
 
@@ -6792,43 +6848,60 @@ export default function KnowledgeBaseDashboard() {
             return;
         }
 
-        await uploadDocument(file, category);
+        let dbType: DocumentType = 'LAINNYA';
+        if (uiCategory === 'SOP Audit') dbType = 'REGULASI_INTERNAL';
+        if (uiCategory === 'Peraturan Daerah') dbType = 'REGULASI_DAERAH';
+        if (uiCategory === 'SSH') dbType = 'TEMPLATES';
+
+        await uploadDocument(file, dbType, file.name);
     };
 
     const getStepStatus = (step: 'upload' | 'parse' | 'vector', doc: KnowledgeDoc | null) => {
         if (!doc) return 'pending';
-
         const status = doc.status;
         switch (step) {
             case 'upload':
                 return 'completed';
             case 'parse':
                 if (status === 'Parsing' || status === 'Uploading') return 'active';
-                if (status === 'Vectorizing' || status === 'Success') return 'completed';
+                if (status === 'Vectorizing' || status === 'Success' || status === 'AKTIF') return 'completed';
                 return 'pending';
             case 'vector':
                 if (status === 'Vectorizing') return 'active';
-                if (status === 'Success') return 'completed';
+                if (status === 'Success' || status === 'AKTIF') return 'completed';
                 return 'pending';
             default:
                 return 'pending';
         }
     };
 
+    const formatBytes = (bytes?: number) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const getLabelForType = (type: DocumentType) => {
+        if (type === 'REGULASI_INTERNAL') return 'SOP Audit';
+        if (type === 'REGULASI_DAERAH') return 'Peraturan Daerah';
+        if (type === 'TEMPLATES') return 'Standar Harga / Template';
+        return type.replace('_', ' ');
+    };
+
     return (
         <div className="space-y-6">
-            {}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
                         <Brain className="w-6 h-6 text-blue-600 animate-pulse" />
-                        Knowledge Base Ingestion
+                        Knowledge Base Ingestion (Live DB)
                     </h1>
                     <p className="text-slate-500 text-sm mt-1">Unggah dokumen regulasi daerah, SOP, dan pedoman untuk dilatih ke dalam RAG AI Audit Engine.</p>
                 </div>
             </div>
 
-            {}
             <div className="grid grid-cols-1 sm:grid-cols-4 border border-slate-200 bg-white rounded-none divide-y sm:divide-y-0 sm:divide-x divide-slate-200">
                 <div className="p-4 flex items-center gap-3">
                     <div className="bg-slate-100 p-2 border border-slate-200 text-slate-600 rounded-none">
@@ -6836,7 +6909,7 @@ export default function KnowledgeBaseDashboard() {
                     </div>
                     <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vector DB Provider</p>
-                        <p className="text-sm font-bold text-slate-800">Qdrant Server</p>
+                        <p className="text-sm font-bold text-slate-800">PostgreSQL (pgvector)</p>
                     </div>
                 </div>
                 <div className="p-4 flex items-center gap-3">
@@ -6862,16 +6935,13 @@ export default function KnowledgeBaseDashboard() {
                         <Zap className="w-4 h-4 text-amber-600" />
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">RAG Latency (Query)</p>
-                        <p className="text-sm font-bold text-slate-800">&lt; 140ms</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Storage Pipeline</p>
+                        <p className="text-sm font-bold text-slate-800">BullMQ (Async)</p>
                     </div>
                 </div>
             </div>
 
-            {}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-                {}
                 <div className="md:col-span-1 space-y-3">
                     <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
                         <BookOpen className="w-4 h-4 text-slate-500" />
@@ -6879,32 +6949,31 @@ export default function KnowledgeBaseDashboard() {
                     </div>
                     <div className="flex flex-col gap-2">
                         {[
-                            { name: 'SOP Audit', desc: 'Pedoman standar operasional pemeriksaan auditor di lapangan.' },
-                            { name: 'Peraturan Daerah', desc: 'Aturan hukum, perda, & perda anggaran daerah setempat.' },
-                            { name: 'SSH', desc: 'Standar Satuan Harga barang/jasa daerah untuk verifikasi SPJ.' }
+                            { name: 'SOP Audit', desc: 'Pedoman standar operasional pemeriksaan auditor.' },
+                            { name: 'Peraturan Daerah', desc: 'Aturan hukum & perda daerah setempat.' },
+                            { name: 'SSH', desc: 'Standar Satuan Harga untuk referensi PBJ.' }
                         ].map((cat) => (
                             <button
                                 key={cat.name}
-                                onClick={() => setCategory(cat.name as any)}
-                                className={`p-3.5 text-left border rounded-none transition-all flex justify-between items-start gap-2 ${
-                                    category === cat.name
-                                        ? 'bg-blue-50/50 border-blue-600 ring-0'
-                                        : 'bg-white border-slate-200 hover:bg-slate-50'
-                                }`}
+                                onClick={() => setUiCategory(cat.name as any)}
+                                disabled={isProcessing}
+                                className={`p-3.5 text-left border rounded-none transition-all flex justify-between items-start gap-2 ${uiCategory === cat.name
+                                    ? 'bg-blue-50/50 border-blue-600 ring-0'
+                                    : 'bg-white border-slate-200 hover:bg-slate-50'
+                                    } disabled:opacity-50`}
                             >
                                 <div className="space-y-0.5">
                                     <p className="text-xs font-bold text-slate-800">{cat.name}</p>
                                     <p className="text-[11px] text-slate-400 leading-relaxed">{cat.desc}</p>
                                 </div>
-                                {category === cat.name && (
-                                    <Check className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                                {uiCategory === cat.name && (
+                                    <Check className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
                                 )}
                             </button>
                         ))}
                     </div>
                 </div>
 
-                {}
                 <div className="md:col-span-2 space-y-3">
                     <div className="flex items-center gap-1.5 border-b border-slate-200 pb-2">
                         <UploadCloud className="w-4 h-4 text-slate-500" />
@@ -6916,12 +6985,13 @@ export default function KnowledgeBaseDashboard() {
                         onDragOver={handleDrag}
                         onDragLeave={handleDrag}
                         onDrop={handleDrop}
-                        className={`h-[160px] border-2 border-dashed flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-all rounded-none ${
-                            dragActive
-                                ? 'border-blue-600 bg-blue-50/20'
-                                : 'border-slate-300 bg-white hover:bg-slate-50'
-                        }`}
-                        onClick={onButtonClick}
+                        className={`h-40 border-2 border-dashed flex flex-col items-center justify-center p-4 text-center transition-all rounded-none ${dragActive
+                            ? 'border-blue-600 bg-blue-50/20'
+                            : 'border-slate-300 bg-white hover:bg-slate-50'
+                            } ${isProcessing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                        onClick={() => {
+                            if (!isProcessing) onButtonClick();
+                        }}
                     >
                         <input
                             ref={fileInputRef}
@@ -6929,51 +6999,51 @@ export default function KnowledgeBaseDashboard() {
                             className="hidden"
                             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
                             onChange={handleFileChange}
+                            disabled={isProcessing}
                         />
                         <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
-                        <p className="text-xs font-bold text-slate-700">Drag & Drop Berkas di Sini</p>
-                        <p className="text-[10px] text-slate-400 mt-1">atau klik untuk menelusuri folder (PDF, Word, Excel, TXT)</p>
+                        <p className="text-xs font-bold text-slate-700">
+                            {isProcessing ? 'Sistem sedang memproses dokumen...' : 'Drag & Drop Berkas di Sini'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-1">
+                            {!isProcessing && 'atau klik untuk menelusuri folder (PDF, Word, Excel, TXT)'}
+                        </p>
                     </div>
                 </div>
             </div>
 
-            {}
             {currentDoc && (
-                <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4">
-                    <div className="flex justify-between items-center border-b border-slate-100 pb-2">
+                <div className="border border-blue-200 bg-blue-50/30 p-5 rounded-none space-y-4">
+                    <div className="flex justify-between items-center border-b border-blue-100 pb-2">
                         <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-bold text-slate-800 truncate max-w-[200px] sm:max-w-md" title={currentDoc.fileName}>
-                                {currentDoc.fileName}
+                            <span className="text-xs font-bold text-slate-800 truncate max-w-50 sm:max-w-md">
+                                {currentDoc.title}
                             </span>
                         </div>
-                        <span className="text-[10px] font-mono bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 font-bold">
-                            {currentDoc.category}
+                        <span className="text-[10px] font-mono bg-white text-blue-600 border border-blue-200 px-2 py-0.5 font-bold">
+                            {getLabelForType(currentDoc.type)}
                         </span>
                     </div>
 
-                    {}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
-                        {}
                         <div className="flex items-start gap-2.5">
-                            <div className="bg-emerald-500 text-white rounded-none p-1 flex-shrink-0">
+                            <div className="bg-emerald-500 text-white rounded-none p-1 shrink-0">
                                 <CheckCircle className="w-4 h-4" />
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-slate-800">1. Document Uploaded</p>
-                                <p className="text-[10px] text-slate-400 mt-0.5">File ditampung di server storage.</p>
+                                <p className="text-xs font-bold text-slate-800">1. Server Received</p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">File diterima via API & Disk I/O.</p>
                             </div>
                         </div>
 
-                        {}
                         <div className="flex items-start gap-2.5">
-                            <div className={`rounded-none p-1 flex-shrink-0 border ${
-                                getStepStatus('parse', currentDoc) === 'completed'
-                                    ? 'bg-emerald-500 text-white border-emerald-500'
-                                    : getStepStatus('parse', currentDoc) === 'active'
+                            <div className={`rounded-none p-1 shrink-0 border ${getStepStatus('parse', currentDoc) === 'completed'
+                                ? 'bg-emerald-500 text-white border-emerald-500'
+                                : getStepStatus('parse', currentDoc) === 'active'
                                     ? 'bg-blue-600 text-white border-blue-600 animate-pulse'
                                     : 'bg-slate-100 text-slate-400 border-slate-200'
-                            }`}>
+                                }`}>
                                 {getStepStatus('parse', currentDoc) === 'completed' ? (
                                     <CheckCircle className="w-4 h-4" />
                                 ) : (
@@ -6981,22 +7051,20 @@ export default function KnowledgeBaseDashboard() {
                                 )}
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-slate-800">2. Text Chunking & Parsing</p>
+                                <p className="text-xs font-bold text-slate-800">2. Async BullMQ Worker</p>
                                 <p className="text-[10px] text-slate-400 mt-0.5">
-                                    {getStepStatus('parse', currentDoc) === 'completed' ? 'Teks berhasil dipilah per paragraf.' : 'Membaca struktur karakter dokumen.'}
+                                    Parsing, Text Sanitization & Semantic Chunking.
                                 </p>
                             </div>
                         </div>
 
-                        {}
                         <div className="flex items-start gap-2.5">
-                            <div className={`rounded-none p-1 flex-shrink-0 border ${
-                                getStepStatus('vector', currentDoc) === 'completed'
-                                    ? 'bg-emerald-500 text-white border-emerald-500'
-                                    : getStepStatus('vector', currentDoc) === 'active'
+                            <div className={`rounded-none p-1 shrink-0 border ${getStepStatus('vector', currentDoc) === 'completed'
+                                ? 'bg-emerald-500 text-white border-emerald-500'
+                                : getStepStatus('vector', currentDoc) === 'active'
                                     ? 'bg-blue-600 text-white border-blue-600 animate-pulse'
                                     : 'bg-slate-100 text-slate-400 border-slate-200'
-                            }`}>
+                                }`}>
                                 {getStepStatus('vector', currentDoc) === 'completed' ? (
                                     <CheckCircle className="w-4 h-4" />
                                 ) : (
@@ -7004,15 +7072,27 @@ export default function KnowledgeBaseDashboard() {
                                 )}
                             </div>
                             <div>
-                                <p className="text-xs font-bold text-slate-800">3. Embedding & Vector DB Ingest</p>
+                                <p className="text-xs font-bold text-slate-800">3. AI Embedding & pgvector</p>
                                 <p className="text-[10px] text-slate-400 mt-0.5">
-                                    {getStepStatus('vector', currentDoc) === 'completed' ? 'Selesai. Masuk ke Knowledge Base RAG.' : 'Mengubah teks menjadi matriks vektor.'}
+                                    OpenAI API Call & Database Transaction.
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    {}
+                    { }
+                    {isProcessing && (
+                        <div className="pt-2">
+                            <div className="h-1.5 w-full bg-blue-100 border border-blue-200 overflow-hidden">
+                                <div
+                                    className="h-full bg-blue-600 transition-all duration-300"
+                                    style={{ width: `${currentDoc.progress}%` }}
+                                />
+                            </div>
+                            <p className="text-[10px] font-bold text-blue-800 mt-1 text-right">{currentDoc.progress}%</p>
+                        </div>
+                    )}
+
                     {currentDoc.status === 'Success' && (
                         <div className="pt-2 flex justify-end">
                             <Button
@@ -7020,32 +7100,49 @@ export default function KnowledgeBaseDashboard() {
                                 size="sm"
                                 className="bg-slate-800 hover:bg-slate-900 rounded-none text-xs shadow-none"
                             >
-                                Bersihkan Pipeline
+                                Bersihkan Log Pipeline
                             </Button>
                         </div>
                     )}
                 </div>
             )}
 
-            {}
             <div className="space-y-3">
-                <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider border-b border-slate-200 pb-2">Daftar Regulasi Di-ingest ({docList.length} Dokumen)</h3>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Daftar Regulasi Terindeks ({docList.length})</h3>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={fetchDocuments}
+                        disabled={isLoadingDocs}
+                        className="h-6 text-[10px] px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-none"
+                    >
+                        <RefreshCw className={`w-3 h-3 mr-1 ${isLoadingDocs ? 'animate-spin' : ''}`} />
+                        Segarkan Database
+                    </Button>
+                </div>
 
-                <div className="border border-slate-200 bg-white rounded-none">
-                    {docList.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500 text-xs italic">
-                            Belum ada dokumen regulasi yang di-ingest. Silakan unggah dokumen di atas.
+                <div className="border border-slate-200 bg-white rounded-none relative">
+                    {isLoadingDocs && docList.length === 0 ? (
+                        <div className="p-12 text-center text-blue-600 flex flex-col items-center">
+                            <RefreshCw className="w-6 h-6 animate-spin mb-2" />
+                            <span className="text-xs font-bold">Mengambil data dari PostgreSQL...</span>
+                        </div>
+                    ) : docList.length === 0 ? (
+                        <div className="p-12 text-center text-slate-500 text-xs italic">
+                            Database Vektor kosong. Silakan unggah dokumen regulasi pertama Anda.
                         </div>
                     ) : (
                         <Table className="border-collapse">
                             <TableHeader className="bg-slate-50 border-b border-slate-200">
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className="w-[50px] font-bold text-slate-700 text-xs">No</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs">Nama Berkas</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs w-[180px]">Kategori</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs text-center w-[120px]">Ukuran File</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs w-[140px]">Status RAG</TableHead>
-                                    <TableHead className="text-right font-bold text-slate-700 text-xs w-[100px]">Aksi</TableHead>
+                                    <TableHead className="w-12.5 font-bold text-slate-700 text-xs">No</TableHead>
+                                    <TableHead className="font-bold text-slate-700 text-xs">Judul Dokumen</TableHead>
+                                    <TableHead className="font-bold text-slate-700 text-xs w-45">Tipe (RAG Context)</TableHead>
+                                    <TableHead className="font-bold text-slate-700 text-xs text-center w-30">Ukuran File</TableHead>
+                                    <TableHead className="font-bold text-slate-700 text-xs text-center w-30">Total Chunks</TableHead>
+                                    <TableHead className="font-bold text-slate-700 text-xs w-35">Status DB</TableHead>
+                                    <TableHead className="text-right font-bold text-slate-700 text-xs w-25">Aksi</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -7054,31 +7151,30 @@ export default function KnowledgeBaseDashboard() {
                                         <TableCell className="font-mono text-slate-400 text-xs">{index + 1}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <FileText className="w-4 h-4 text-slate-400 flex-shrink-0" />
-                                                <span className="font-semibold text-slate-800 text-sm truncate max-w-sm sm:max-w-lg" title={doc.fileName}>
-                                                    {doc.fileName}
+                                                <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                                                <span className="font-semibold text-slate-800 text-xs truncate max-w-62.5" title={doc.title}>
+                                                    {doc.title}
                                                 </span>
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 border border-slate-200">
-                                                {doc.category}
+                                            <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 border border-slate-200">
+                                                {getLabelForType(doc.type)}
                                             </span>
                                         </TableCell>
-                                        <TableCell className="text-center font-mono text-xs text-slate-500">
-                                            {doc.fileSize}
+                                        <TableCell className="text-center font-mono text-[11px] text-slate-500">
+                                            {formatBytes(doc.metadata?.fileSize)}
+                                        </TableCell>
+                                        <TableCell className="text-center font-mono text-[11px] font-bold text-slate-700">
+                                            {doc.metadata?.totalChunks || '-'}
                                         </TableCell>
                                         <TableCell>
-                                            <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 border ${
-                                                doc.status === 'Success'
-                                                    ? 'bg-green-50 text-green-700 border-green-200'
-                                                    : doc.status === 'Error'
-                                                    ? 'bg-red-50 text-red-700 border-red-200'
-                                                    : 'bg-blue-50 text-blue-700 border-blue-200 animate-pulse'
-                                            }`}>
-                                                {doc.status === 'Success' && <CheckCircle className="w-3 h-3 text-green-500" />}
-                                                {doc.status === 'Error' && <AlertCircle className="w-3 h-3 text-red-500" />}
-                                                {doc.status === 'Success' ? 'Ready' : doc.status === 'Error' ? 'Error' : doc.status}
+                                            <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 border uppercase ${doc.status === 'AKTIF'
+                                                ? 'bg-green-50 text-green-700 border-green-200'
+                                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                                                }`}>
+                                                {doc.status === 'AKTIF' ? <CheckCircle className="w-3 h-3 text-green-500" /> : <AlertCircle className="w-3 h-3 text-amber-500" />}
+                                                {doc.status === 'AKTIF' ? 'READY (RAG)' : doc.status}
                                             </span>
                                         </TableCell>
                                         <TableCell className="text-right">
@@ -7087,12 +7183,11 @@ export default function KnowledgeBaseDashboard() {
                                                 size="icon"
                                                 className="h-8 w-8 rounded-none border border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 text-slate-600"
                                                 onClick={() => {
-                                                    if (window.confirm(`Hapus dokumen "${doc.fileName}" dari basis pengetahuan RAG?`)) {
+                                                    if (window.confirm(`PERINGATAN: Menghapus "${doc.title}" akan menghancurkan data vektor AI secara permanen. Lanjutkan?`)) {
                                                         deleteDocument(doc.id);
-                                                        toast.success('Dihapus', { description: 'Dokumen berhasil dikeluarkan dari Vector database.' });
                                                     }
                                                 }}
-                                                title="Hapus Dokumen"
+                                                title="Hapus Permanen dari DB"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </Button>
@@ -7728,7 +7823,7 @@ export default function RiskAssessment({ isKasubag }: RiskAssessmentProps) {
                 </h3>
                 {isKasubag && (
                     <Button
-                        onClick={recalculateRisks}
+                        onClick={() => recalculateRisks(2026)}
                         disabled={isCalculating}
                         className="bg-blue-600 hover:bg-blue-700 rounded-none text-xs shadow-none"
                     >
@@ -8306,11 +8401,12 @@ import { useReportStore } from '@/store/useReportStore';
 import { useStStore } from '@/store/useStStore';
 import { useState, useRef } from 'react';
 import {
-    Download, UploadCloud, FileText, CheckCircle2, AlertTriangle, Building, ArrowRight
+    Download, UploadCloud, FileText, CheckCircle2, AlertTriangle, Building, ArrowRight, Eye, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 interface OpdPortalProps {
     stId: string;
@@ -8377,13 +8473,13 @@ export default function OpdPortal({ stId }: OpdPortalProps) {
         toast.success('Mengunduh NHP PDF...', { description: 'Mengunduh salinan berkas Naskah Hasil Pemeriksaan.' });
     };
 
-    if (!st || !nhp) {
+    if (!st) {
         return (
             <div className="max-w-md mx-auto my-12 text-center p-8 border border-slate-200 bg-white rounded-none">
                 <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-                <h2 className="text-lg font-bold text-slate-800">Menunggu Dokumen NHP</h2>
+                <h2 className="text-lg font-bold text-slate-800">Surat Tugas Tidak Ditemukan</h2>
                 <p className="text-slate-500 text-xs mt-2 mb-6 leading-relaxed">
-                    Inspektorat belum mempublikasikan Naskah Hasil Pemeriksaan (NHP) untuk Surat Tugas ini ke portal Anda. Harap hubungi tim pemeriksa terkait.
+                    Surat Tugas yang Anda cari tidak terdaftar atau tidak dapat diakses dari portal dinas Anda.
                 </p>
             </div>
         );
@@ -8402,104 +8498,147 @@ export default function OpdPortal({ stId }: OpdPortalProps) {
                     <h2 className="text-sm font-bold leading-normal">
                         OPD: <strong className="text-blue-300">{st.namaOpd}</strong>
                     </h2>
-                    <p className="text-[10px] text-slate-350">Agenda: {st.namaAudit} ({st.noSt})</p>
+                    <p className="text-[10px] text-slate-355">Agenda: {st.namaAudit} ({st.noSt})</p>
                 </div>
-                <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-600 text-white rounded-none">
-                    Status: {nhp.status.replace('_', ' ')}
+                <span className="text-[9px] font-bold px-2 py-0.5 bg-blue-600 text-white rounded-none uppercase">
+                    Status: {nhp ? nhp.status.replace('_', ' ') : 'PEMERIKSAAN LAPANGAN'}
                 </span>
             </div>
 
-            {}
-            <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4">
-                <div className="border-b border-slate-100 pb-2">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">1. Dokumen Hasil Pemeriksaan (NHP)</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Unduh draf temuan audit untuk dipelajari.</p>
-                </div>
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 p-4 border border-slate-150 rounded-none">
-                    <div className="space-y-1">
-                        <p className="text-xs font-bold text-slate-800">Draft_NHP_{st.noSt.replace(/\
-                        <p className="text-[10px] text-slate-550 leading-relaxed font-semibold">Berisi 5 unsur rekomendasi pengawasan awal.</p>
+            {!nhp ? (
+                <div className="border border-slate-200 bg-white p-8 rounded-none text-center space-y-4">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto">
+                        <Clock className="w-8 h-8 animate-pulse text-blue-500" />
                     </div>
-                    <Button
-                        onClick={handleDownloadNhp}
-                        className="bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-none shadow-none flex items-center gap-1.5 shrink-0"
-                    >
-                        <Download className="w-4 h-4" />
-                        Download NHP
-                    </Button>
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Pemeriksaan Lapangan Sedang Berlangsung</h3>
+                        <p className="text-slate-500 text-xs max-w-sm mx-auto leading-relaxed">
+                            Tim Auditor Inspektorat sedang melakukan pemeriksaan lapangan atau menyusun dokumen hasil audit. Belum ada Naskah Hasil Pemeriksaan (NHP) yang dirilis untuk dinas Anda.
+                        </p>
+                    </div>
+                    <div className="pt-2">
+                        <Link href="/portal/tlhp">
+                            <Button variant="outline" className="text-xs rounded-none border-slate-200">
+                                Lihat Tindak Lanjut LHP Sebelumnya
+                            </Button>
+                        </Link>
+                    </div>
                 </div>
-            </div>
-
-            {}
-            <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4">
-                <div className="border-b border-slate-100 pb-2">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">2. Unggah Tanggapan & Pembelaan Diri</h3>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Kirimkan berkas surat sanggahan resmi/adendum dalam bentuk PDF.</p>
-                </div>
-
-                {tanggapan ? (
-                    <div className="border border-green-200 bg-green-50/20 p-4 rounded-none space-y-2">
-                        <div className="flex items-center gap-2">
-                            <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
-                            <span className="text-xs font-bold text-green-800">Surat Tanggapan Anda Telah Terkirim</span>
+            ) : (
+                <>
+                    {}
+                    <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4">
+                        <div className="border-b border-slate-100 pb-2">
+                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">1. Dokumen Hasil Pemeriksaan (NHP)</h3>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Unduh draf temuan audit untuk dipelajari.</p>
                         </div>
-                        <p className="text-[10px] text-slate-600 pl-7 leading-relaxed">
-                            Berkas **{tanggapan.fileName}** berhasil diunggah pada {tanggapan.uploadDate}. Tim Inspektur sedang menganalisis kesesuaian argumen Anda dengan aturan PBJ.
-                        </p>
-                    </div>
-                ) : isUploading ? (
-                    <div className="h-32 border border-blue-200 bg-blue-50/20 flex flex-col items-center justify-center text-center p-4">
-                        <svg className="w-7 h-7 text-blue-600 animate-spin mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        <p className="text-xs font-bold text-blue-800">Mengunggah Tanggapan Sanggahan...</p>
-                    </div>
-                ) : (
-                    <div
-                        onDragEnter={handleDrag}
-                        onDragOver={handleDrag}
-                        onDragLeave={handleDrag}
-                        onDrop={handleDrop}
-                        onClick={onButtonClick}
-                        className={`h-32 border-2 border-dashed flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-all rounded-none ${
-                            dragActive
-                                ? 'border-blue-650 bg-blue-50/20'
-                                : 'border-slate-300 bg-white hover:bg-slate-50'
-                        }`}
-                    >
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            className="hidden"
-                            accept=".pdf"
-                            onChange={handleFileChange}
-                        />
-                        <UploadCloud className="w-8 h-8 text-slate-400 mb-1.5" />
-                        <p className="text-xs font-bold text-slate-700">Drag & Drop Berkas Sanggahan (PDF)</p>
-                        <p className="text-[9px] text-slate-400 mt-0.5">atau klik di sini untuk memilih berkas dari folder</p>
-                    </div>
-                )}
-            </div>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-slate-50 p-4 border border-slate-150 rounded-none">
+                            <div className="space-y-1">
+                                <p className="text-xs font-bold text-slate-800 font-mono">Draft_NHP_{st.noSt.replace(/\
+                                <p className="text-[10px] text-slate-550 leading-relaxed font-semibold">Berisi 5 unsur rekomendasi pengawasan awal.</p>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    onClick={handleDownloadNhp}
+                                    variant="outline"
+                                    className="border-slate-300 hover:bg-slate-50 text-xs font-bold rounded-none shadow-none flex items-center gap-1.5 shrink-0"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Download NHP
+                                </Button>
 
-            {}
-            {(nhp.status === 'COMPLETED' || st.status === 'SELESAI') && (
-                <div className="border border-indigo-200 bg-indigo-50/20 p-5 rounded-none flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="space-y-1">
-                        <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
-                            LHP Telah Resmi Terbit
-                        </h4>
-                        <p className="text-xs text-slate-600 leading-relaxed font-semibold">
-                            Laporan Hasil Pemeriksaan (LHP) telah diterbitkan secara formal. Silakan masuk ke Portal Tindak Lanjut untuk mengunggah berkas/foto bukti perbaikan.
-                        </p>
+                                <Dialog>
+                                    <DialogTrigger
+                                        className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-none shadow-none flex items-center gap-1.5 shrink-0 px-3 py-1.5 text-center justify-center border border-transparent"
+                                    >
+                                        <Eye className="w-4 h-4" />
+                                        Lihat NHP
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-4xl h-[700px] rounded-none">
+                                        <DialogHeader>
+                                            <DialogTitle className="text-xs font-bold uppercase tracking-wider">
+                                                Naskah Hasil Pemeriksaan: {st.noSt}
+                                            </DialogTitle>
+                                        </DialogHeader>
+                                        <iframe src="https://pdfobject.com/pdf/sample.pdf" className="w-full h-full border border-slate-200 mt-2" />
+                                    </DialogContent>
+                                </Dialog>
+                            </div>
+                        </div>
                     </div>
-                    <Link href={`/portal/tlhp/${st.id}`} className="shrink-0">
-                        <Button className="bg-indigo-750 hover:bg-indigo-800 text-xs font-bold rounded-none shadow-none flex items-center gap-1.5">
-                            Portal Tindak Lanjut (TLHP)
-                            <ArrowRight className="w-4 h-4" />
-                        </Button>
-                    </Link>
-                </div>
+
+                    {}
+                    <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4">
+                        <div className="border-b border-slate-100 pb-2">
+                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">2. Unggah Tanggapan & Pembelaan Diri</h3>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Kirimkan berkas surat sanggahan resmi resmi/adendum dalam bentuk PDF.</p>
+                        </div>
+
+                        {tanggapan ? (
+                            <div className="border border-green-200 bg-green-50/20 p-4 rounded-none space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <CheckCircle2 className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                    <span className="text-xs font-bold text-green-800">Surat Tanggapan Anda Telah Terkirim</span>
+                                </div>
+                                <p className="text-[10px] text-slate-600 pl-7 leading-relaxed">
+                                    Berkas **{tanggapan.fileName}** berhasil diunggah pada {tanggapan.uploadDate}. Tim Inspektur sedang menganalisis kesesuaian argumen Anda dengan aturan PBJ.
+                                </p>
+                            </div>
+                        ) : isUploading ? (
+                            <div className="h-32 border border-blue-200 bg-blue-50/20 flex flex-col items-center justify-center text-center p-4">
+                                <svg className="w-7 h-7 text-blue-600 animate-spin mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                </svg>
+                                <p className="text-xs font-bold text-blue-800">Mengunggah Tanggapan Sanggahan...</p>
+                            </div>
+                        ) : (
+                            <div
+                                onDragEnter={handleDrag}
+                                onDragOver={handleDrag}
+                                onDragLeave={handleDrag}
+                                onDrop={handleDrop}
+                                onClick={onButtonClick}
+                                className={`h-32 border-2 border-dashed flex flex-col items-center justify-center p-4 text-center cursor-pointer transition-all rounded-none ${
+                                    dragActive
+                                        ? 'border-blue-650 bg-blue-50/20'
+                                        : 'border-slate-300 bg-white hover:bg-slate-50'
+                                }`}
+                            >
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    className="hidden"
+                                    accept=".pdf"
+                                    onChange={handleFileChange}
+                                />
+                                <UploadCloud className="w-8 h-8 text-slate-400 mb-1.5" />
+                                <p className="text-xs font-bold text-slate-700">Drag & Drop Berkas Sanggahan (PDF)</p>
+                                <p className="text-[9px] text-slate-400 mt-0.5">atau klik di sini untuk memilih berkas dari folder</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {}
+                    {(nhp.status === 'COMPLETED' || st.status === 'SELESAI') && (
+                        <div className="border border-indigo-200 bg-indigo-50/20 p-5 rounded-none flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                            <div className="space-y-1">
+                                <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-widest flex items-center gap-1.5">
+                                    LHP Telah Resmi Terbit
+                                </h4>
+                                <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                                    Laporan Hasil Pemeriksaan (LHP) telah diterbitkan secara formal. Silakan masuk ke Portal Tindak Lanjut untuk mengunggah berkas/foto bukti perbaikan.
+                                </p>
+                            </div>
+                            <Link href={`/portal/tlhp/${st.id}`} className="shrink-0">
+                                <Button className="bg-indigo-750 hover:bg-indigo-800 text-xs font-bold rounded-none shadow-none flex items-center gap-1.5">
+                                    Portal Tindak Lanjut (TLHP)
+                                    <ArrowRight className="w-4 h-4" />
+                                </Button>
+                            </Link>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );
@@ -9344,139 +9483,147 @@ export const useKkaStore = create<KkaState>((set, get) => ({
 
 import { create } from 'zustand';
 import { toast } from 'sonner';
-
-export type IngestionStatus = 'Uploading' | 'Parsing' | 'Semantic Chunking' | 'Vectorizing' | 'Success' | 'Error';
-
-export interface KnowledgeDoc {
-    id: string;
-    fileName: string;
-    fileSize: string;
-    category: 'SOP Audit' | 'Peraturan Daerah' | 'SSH';
-    uploadDate: string;
-    status: IngestionStatus;
-    progress: number;
-}
+import { api } from '@/lib/api';
+import { KnowledgeDoc, DocumentType } from '@/types/knowledge.type';
 
 interface KnowledgeState {
     docList: KnowledgeDoc[];
     isProcessing: boolean;
     currentDoc: KnowledgeDoc | null;
-    uploadDocument: (file: { name: string; size: number }, category: 'SOP Audit' | 'Peraturan Daerah' | 'SSH') => void;
-    deleteDocument: (id: string) => void;
+    isLoadingDocs: boolean;
+
+    fetchDocuments: () => Promise<void>;
+    uploadDocument: (file: File, type: DocumentType, title: string) => Promise<void>;
+    deleteDocument: (id: string) => Promise<void>;
     clearCurrentDoc: () => void;
 }
 
-const INITIAL_DOCS: KnowledgeDoc[] = [
-    {
-        id: 'doc-1',
-        fileName: 'SOP_Audit_Kinerja_Inspektorat_2025.pdf',
-        fileSize: '1.2 MB',
-        category: 'SOP Audit',
-        uploadDate: new Date('2026-03-01T10:00:00Z').toLocaleString('id-ID'),
-        status: 'Success',
-        progress: 100
-    },
-    {
-        id: 'doc-2',
-        fileName: 'Perda_No_4_Tahun_2024_APBD_Surabaya.pdf',
-        fileSize: '4.5 MB',
-        category: 'Peraturan Daerah',
-        uploadDate: new Date('2026-03-05T14:30:00Z').toLocaleString('id-ID'),
-        status: 'Success',
-        progress: 100
-    },
-    {
-        id: 'doc-3',
-        fileName: 'Standar_Satuan_Harga_SSH_Barang_2026.docx',
-        fileSize: '820 KB',
-        category: 'SSH',
-        uploadDate: new Date('2026-03-10T11:15:00Z').toLocaleString('id-ID'),
-        status: 'Success',
-        progress: 100
-    }
-];
-
 export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
-    docList: INITIAL_DOCS,
+    docList: [],
     isProcessing: false,
     currentDoc: null,
+    isLoadingDocs: false,
 
-    uploadDocument: (file, category) => {
-
-        const sizeStr = file.size > 1024 * 1024
-            ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-            : `${(file.size / 1024).toFixed(0)} KB`;
-
-        const newId = `doc-${Date.now()}`;
-        const newDoc: KnowledgeDoc = {
-            id: newId,
-            fileName: file.name,
-            fileSize: sizeStr,
-            category: category,
-            uploadDate: new Date().toLocaleString('id-ID'),
-            status: 'Uploading',
-            progress: 0
-        };
-
-        set({
-            isProcessing: true,
-            currentDoc: newDoc,
-
-            docList: [newDoc, ...get().docList]
-        });
-
-        let currentProgress = 0;
-        const intervalTime = 800;
-
-        const interval = setInterval(() => {
-            currentProgress += 10;
-
-            let status: IngestionStatus = 'Uploading';
-            if (currentProgress >= 25 && currentProgress < 50) {
-                status = 'Parsing';
-            } else if (currentProgress >= 50 && currentProgress < 75) {
-                status = 'Semantic Chunking';
-            } else if (currentProgress >= 75 && currentProgress < 100) {
-                status = 'Vectorizing';
-            } else if (currentProgress >= 100) {
-                status = 'Success';
-                currentProgress = 100;
-                clearInterval(interval);
-            }
-
-            set((state) => {
-                const updatedList = state.docList.map((doc) => {
-                    if (doc.id === newId) {
-                        return { ...doc, progress: currentProgress, status };
-                    }
-                    return doc;
-                });
-
-                const updatedCurrentDoc = state.currentDoc?.id === newId
-                    ? { ...state.currentDoc, progress: currentProgress, status }
-                    : state.currentDoc;
-
-                return {
-                    docList: updatedList,
-                    currentDoc: updatedCurrentDoc,
-                    isProcessing: currentProgress < 100
-                };
+    fetchDocuments: async () => {
+        set({ isLoadingDocs: true });
+        try {
+            const response = await api.get('/documents');
+            set({ docList: response.data.data, isLoadingDocs: false });
+        } catch (error: any) {
+            toast.error('Gagal Memuat Data', {
+                description: error.response?.data?.message || 'Tidak dapat terhubung ke server database.',
             });
-
-            if (status === 'Success') {
-                toast.success('Ingesti AI Berhasil', {
-                    description: 'Data telah tersimpan di Database Vektor dan siap menjadi referensi AI',
-                    duration: 5000
-                });
-            }
-        }, intervalTime);
+            set({ isLoadingDocs: false });
+        }
     },
 
-    deleteDocument: (id) => {
-        set((state) => ({
-            docList: state.docList.filter((doc) => doc.id !== id),
-            currentDoc: state.currentDoc?.id === id ? null : state.currentDoc
-        }));
+    uploadDocument: async (file: File, type: DocumentType, title: string) => {
+        const tempId = `temp-${Date.now()}`;
+        const tempDoc: KnowledgeDoc = {
+            id: tempId,
+            title: title,
+            type: type,
+            status: 'Uploading',
+            filePath: '',
+            createdAt: new Date().toISOString(),
+            progress: 0,
+            metadata: {
+                id: '',
+                fileSize: file.size,
+                mimeType: file.type,
+                totalChunks: 0,
+                hash: ''
+            }
+        };
+
+        set({ isProcessing: true, currentDoc: tempDoc });
+
+        try {
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('type', type);
+            formData.append('title', title);
+
+            const res = await api.post('/documents/ingest', formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            });
+
+            const expectedHash = res.data.data?.hash;
+
+            let currentProgress = 0;
+            const visualInterval = setInterval(() => {
+                currentProgress += Math.floor(Math.random() * 15) + 5;
+                if (currentProgress > 90) currentProgress = 90;
+
+                let status: any = 'Parsing';
+                if (currentProgress >= 60) status = 'Vectorizing';
+
+                set({ currentDoc: { ...get().currentDoc!, progress: currentProgress, status } });
+            }, 1000);
+
+            const pollInterval = setInterval(async () => {
+                try {
+                    const listRes = await api.get('/documents');
+                    const docs = listRes.data.data;
+
+                    const foundDoc = docs.find((d: any) => d.metadata?.hash === expectedHash);
+
+                    if (foundDoc && foundDoc.status === 'AKTIF') {
+                        clearInterval(visualInterval);
+                        clearInterval(pollInterval);
+
+                        set({
+                            isProcessing: false,
+                            docList: docs,
+                            currentDoc: { ...get().currentDoc!, progress: 100, status: 'Success' }
+                        });
+
+                        toast.success('Ingesti AI Selesai', {
+                            description: 'Berkas telah selesai dipotong dan disisipkan ke Vector DB (pgvector).',
+                        });
+                    }
+                } catch (pollError) {
+                    console.error('Terjadi gangguan saat memantau status RAG.', pollError);
+                }
+            }, 3000);
+
+            setTimeout(() => {
+                if (get().isProcessing) {
+                    clearInterval(visualInterval);
+                    clearInterval(pollInterval);
+                    set({ isProcessing: false, currentDoc: { ...get().currentDoc!, status: 'Error' } });
+                    toast.error('Waktu Tunggu Habis (Timeout)', {
+                        description: 'Server AI membutuhkan waktu terlalu lama. Dokumen mungkin masih diproses di latar belakang.',
+                    });
+                }
+            }, 120000);
+
+        } catch (error: any) {
+            set({ isProcessing: false, currentDoc: null });
+            toast.error('Gagal Mengunggah Dokumen', {
+                description: error.response?.data?.message || 'Terjadi kesalahan sistem (kemungkinan timeout API).',
+            });
+        }
+    },
+
+    deleteDocument: async (id: string) => {
+        try {
+            await api.delete(`/documents/${id}`);
+
+            set((state) => ({
+                docList: state.docList.filter((doc) => doc.id !== id),
+                currentDoc: state.currentDoc?.id === id ? null : state.currentDoc
+            }));
+
+            toast.success('Dokumen Terhapus', {
+                description: 'Berkas fisik dan Vektor AI berhasil dihapus secara permanen.'
+            });
+        } catch (error: any) {
+            toast.error('Gagal Menghapus Dokumen', {
+                description: error.response?.data?.message || 'Terjadi kesalahan saat menghapus data.',
+            });
+        }
     },
 
     clearCurrentDoc: () => {
@@ -9637,6 +9784,8 @@ export const useOpdStore = create<OpdState>((set, get) => ({
 
 import { create } from 'zustand';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { useAuthStore } from './useAuthStore';
 
 export interface OpdRisk {
     opdId: string;
@@ -9658,9 +9807,10 @@ export interface AuditAgenda {
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
 }
 
-export type PkptStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'PUBLISHED';
+export type PkptStatus = 'DRAF' | 'MENUNGGU_PERSETUJUAN' | 'DISETUJUI';
 
 interface PkptState {
+    pkptId: string | null;
     riskList: OpdRisk[];
     draftAgendas: AuditAgenda[];
     status: PkptStatus;
@@ -9668,15 +9818,19 @@ interface PkptState {
     tteHash: string | null;
     isCalculating: boolean;
     isGenerating: boolean;
+    isParsingFile: boolean;
     logs: string[];
 
     syncWithOpdList: (opds: any[]) => void;
-    recalculateRisks: () => Promise<void>;
-    generateAiPkpt: () => Promise<void>;
-    updateAgenda: (id: string, updated: Partial<AuditAgenda>) => void;
-    submitToInspektur: () => void;
+    fetchActivePkpt: (tahun: number) => Promise<void>;
+    fetchRiskRanking: (tahun: number) => Promise<void>;
+    recalculateRisks: (tahun?: number) => Promise<void>;
+    generateAiPkpt: (tahun?: number) => Promise<void>;
+    parsePkptFromFile: (file: File, tahun: number) => Promise<void>;
+    updateAgenda: (id: string, updated: Partial<AuditAgenda>) => Promise<void>;
+    submitToInspektur: () => Promise<void>;
     approveDraft: (signatureName: string) => Promise<void>;
-    rejectDraft: (reason: string) => void;
+    rejectDraft: (reason: string) => Promise<void>;
 }
 
 const INITIAL_RISKS: Omit<OpdRisk, 'ntr' | 'prioritas'>[] = [
@@ -9697,16 +9851,18 @@ const calculateNtrAndPriority = (nri: number, nfr: number) => {
 };
 
 export const usePkptStore = create<PkptState>((set, get) => ({
+    pkptId: null,
     riskList: INITIAL_RISKS.map(item => {
         const { ntr, prioritas } = calculateNtrAndPriority(item.nri, item.nfr);
         return { ...item, ntr, prioritas };
     }),
     draftAgendas: [],
-    status: 'DRAFT',
+    status: 'DRAF',
     rejectionReason: null,
     tteHash: null,
     isCalculating: false,
     isGenerating: false,
+    isParsingFile: false,
     logs: [],
 
     syncWithOpdList: (opds) => {
@@ -9742,142 +9898,179 @@ export const usePkptStore = create<PkptState>((set, get) => ({
         set({ riskList: filteredRisks });
     },
 
-    recalculateRisks: async () => {
-        set({ isCalculating: true });
+    fetchActivePkpt: async (tahun) => {
+        try {
+            const res = await api.get('/pkpt');
+            const pkpts = res.data;
+            const currentPkpt = pkpts.find((p: any) => p.tahunAnggaran === tahun);
 
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+            if (currentPkpt) {
+                const mappedAgendas = currentPkpt.agendaAudits.map((a: any) => {
+                    const hp = a.substansiDokumen?.hariPemeriksaan;
+                    const totalHp = hp ? (Number(hp.pj||0) + Number(hp.wkpj||0) + Number(hp.dalnis||0) + Number(hp.kt||0) + Number(hp.at||0)) : 0;
 
-        set((state) => {
-            const updated = state.riskList.map(risk => {
+                    let prioritas: 'Tinggi'|'Sedang'|'Rendah' = 'Sedang';
+                    const alasan = String(a.substansiDokumen?.alasanPrioritas || '').toLowerCase();
+                    if (alasan.includes('tinggi') || alasan.includes('high')) prioritas = 'Tinggi';
+                    else if (alasan.includes('rendah') || alasan.includes('low')) prioritas = 'Rendah';
 
-                const nriDelta = (Math.random() - 0.5) * 0.6;
-                const nfrDelta = (Math.random() - 0.5) * 0.8;
+                    return {
+                        id: a.id,
+                        namaAudit: a.substansiDokumen?.namaAudit || a.jenisPengawasan,
+                        opdId: a.opdId,
+                        namaOpd: a.opd?.namaOpd || 'Unknown',
+                        alokasiWaktu: a.substansiDokumen?.alokasiWaktu || (totalHp > 0 ? `${totalHp} Hari Pemeriksaan` : `Target Bulan ke-${a.perkiraanBulan}`),
+                        anggaran: Number(a.estimasiAnggaran),
+                        prioritas
+                    };
+                });
 
-                const newNri = Number(Math.max(1, Math.min(10, risk.nri + nriDelta)).toFixed(1));
-                const newNfr = Number(Math.max(1, Math.min(10, risk.nfr + nfrDelta)).toFixed(1));
-
-                const { ntr, prioritas } = calculateNtrAndPriority(newNri, newNfr);
-                return {
-                    ...risk,
-                    nri: newNri,
-                    nfr: newNfr,
-                    ntr,
-                    prioritas
-                };
-            });
-
-            return {
-                riskList: updated,
-                isCalculating: false
-            };
-        });
-
-        toast.success('Kalkulasi Selesai', {
-            description: 'Mesin Matematika berhasil memperbarui skor risiko inheren & frekuensi seluruh OPD.'
-        });
+                set({
+                    pkptId: currentPkpt.id,
+                    status: currentPkpt.statusPkpt,
+                    draftAgendas: mappedAgendas,
+                    rejectionReason: currentPkpt.substansiDokumen?.catatanRevisi || null
+                });
+            } else {
+                set({ pkptId: null, status: 'DRAF', draftAgendas: [], rejectionReason: null });
+            }
+        } catch (err) {
+            console.error('Gagal mengambil data PKPT:', err);
+        }
     },
 
-    generateAiPkpt: async () => {
+    fetchRiskRanking: async (tahun) => {
+        try {
+            const res = await api.get(`/pkpt/ranking/${tahun}`);
+            const mapped = res.data.map((r: any) => ({
+                opdId: r.opdId,
+                namaOpd: r.opd?.namaOpd || '',
+                kode: r.opd?.kode || '',
+                nri: Number(r.nri),
+                nfr: Number(r.nfr),
+                ntr: Number(r.ntr),
+                prioritas: Number(r.ntr) >= 7.5 ? 'Tinggi' : Number(r.ntr) >= 5.5 ? 'Sedang' : 'Rendah'
+            }));
+            set({ riskList: mapped });
+        } catch (err) {}
+    },
+
+    recalculateRisks: async (tahun: number = 2026) => {
+        set({ isCalculating: true });
+        try {
+            await api.post('/pkpt/calculate-risk', { tahun });
+            await get().fetchRiskRanking(tahun);
+            toast.success('Kalkulasi Selesai', { description: 'Engine berhasil memperbarui skor NTR seluruh OPD.' });
+        } catch (err: any) {
+            toast.error('Gagal Kalkulasi', { description: err.response?.data?.message || 'Error server.' });
+        } finally {
+            set({ isCalculating: false });
+        }
+    },
+
+    generateAiPkpt: async (tahun: number = 2026) => {
         set({ isGenerating: true, logs: [] });
         const addLog = (text: string) => set(state => ({ logs: [...state.logs, text] }));
 
-        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+        try {
+            addLog('[1/3] Menghubungi NestJS Backend untuk orkestrasi AI...');
+            addLog('[2/3] Membaca data rujukan Knowledge Base RAG & Profil Risiko OPD...');
 
-        addLog('[1/6] Mengumpulkan parameter profil risiko seluruh OPD terdaftar...');
-        await delay(500);
-        addLog('[2/6] Membaca data prioritas risiko (Dinas PUPR teridentifikasi sebagai High Risk)...');
-        await delay(500);
-        addLog('[3/6] Memanggil Mesin RAG AI dengan referensi "SOP_Audit_Kinerja_2025"...');
-        await delay(600);
-        addLog('[4/6] Menganalisis korelasi pagu anggaran dan lokasi geografis anti-fraud...');
-        await delay(500);
-        addLog('[5/6] Menyusun draf program kerja audit tahunan berdasarkan alokasi sumber daya...');
-        await delay(400);
-        addLog('[6/6] Memvalidasi draf sesuai skema JSON PKPT daerah... Selesai.');
-        await delay(300);
+            await api.post('/pkpt/generate-draft', { tahunAnggaran: tahun });
 
-        const risks = get().riskList;
-        const generatedAgendas: AuditAgenda[] = risks.map((risk, index) => {
-            let namaAudit = '';
-            let alokasiWaktu = '';
-            let anggaran = 0;
+            addLog('[3/3] Ekstraksi JSON selesai, menyimpan transaksi ke PostgreSQL...');
 
-            if (risk.prioritas === 'Tinggi') {
-                namaAudit = `Audit Investigatif & Kepatuhan Pembangunan Infrastruktur Fisik (${risk.namaOpd})`;
-                alokasiWaktu = '18 Hari Kerja';
-                anggaran = 120000000;
-            } else if (risk.prioritas === 'Sedang') {
-                namaAudit = `Audit Kinerja & Kepatuhan Pengelolaan Anggaran Dekonsentrasi (${risk.namaOpd})`;
-                alokasiWaktu = '12 Hari Kerja';
-                anggaran = 75000000;
-            } else {
-                namaAudit = `Review Kepatuhan Belanja Operasional Rutin Harian (${risk.namaOpd})`;
-                alokasiWaktu = '8 Hari Kerja';
-                anggaran = 45000000;
-            }
-
-            return {
-                id: `agenda-${index}-${Date.now()}`,
-                namaAudit,
-                opdId: risk.opdId,
-                namaOpd: risk.namaOpd,
-                alokasiWaktu,
-                anggaran,
-                prioritas: risk.prioritas
-            };
-        });
-
-        set({
-            draftAgendas: generatedAgendas,
-            isGenerating: false
-        });
-
-        toast.success('Draf PKPT Berhasil Dibuat', {
-            description: 'AI E-Audit berhasil merekomendasikan program kerja berbasis analisis risiko.'
-        });
+            await get().fetchActivePkpt(tahun);
+            toast.success('Draf PKPT Berhasil Dibuat', { description: 'AI E-Audit berhasil menyusun program berdasarkan risiko.' });
+        } catch (err: any) {
+            toast.error('AI Gagal Memproses', { description: err.response?.data?.message || 'Waktu tunggu LLM habis.' });
+        } finally {
+            set({ isGenerating: false });
+        }
     },
 
-    updateAgenda: (id, updated) => {
-        set(state => ({
-            draftAgendas: state.draftAgendas.map(agenda =>
-                agenda.id === id ? { ...agenda, ...updated } : agenda
-            )
-        }));
+    parsePkptFromFile: async (file, tahun) => {
+        set({ isParsingFile: true, logs: [] });
+        const addLog = (text: string) => set(state => ({ logs: [...state.logs, text] }));
+
+        try {
+            addLog(`Membaca file biner "${file.name}"...`);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('tahunAnggaran', tahun.toString());
+
+            await api.post('/pkpt/parse-document', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+            addLog('Ekstraksi dan Fuzzy Match selesai. Merender tabel...');
+            await get().fetchActivePkpt(tahun);
+
+            toast.success('Ekstraksi Dokumen Berhasil');
+        } catch (error: any) {
+            toast.error('Gagal Ekstraksi PKPT', { description: error.response?.data?.message || error.message });
+        } finally {
+            set({ isParsingFile: false });
+        }
     },
 
-    submitToInspektur: () => {
-        set({ status: 'PENDING_APPROVAL' });
-        toast.info('Draf PKPT Diajukan', {
-            description: 'Dokumen PKPT berhasil dikirim ke meja Inspektur untuk ditinjau.'
-        });
+    updateAgenda: async (id, updated) => {
+        try {
+            await api.put(`/pkpt/agenda/${id}`, {
+                jenisPengawasan: updated.namaAudit,
+                estimasiAnggaran: updated.anggaran,
+                substansiDokumen: {
+                    namaAudit: updated.namaAudit,
+                    alokasiWaktu: updated.alokasiWaktu
+                }
+            });
+
+            set(state => ({
+                draftAgendas: state.draftAgendas.map(agenda => agenda.id === id ? { ...agenda, ...updated } : agenda)
+            }));
+        } catch (err) {
+            toast.error('Gagal menyimpan perubahan sel.');
+        }
+    },
+
+    submitToInspektur: async () => {
+        const pkptId = get().pkptId;
+        if (!pkptId) return;
+        try {
+            await api.post(`/pkpt/${pkptId}/submit`);
+            set({ status: 'MENUNGGU_PERSETUJUAN' });
+            toast.success('Draf PKPT Diajukan ke Inspektur');
+        } catch (err) {
+            toast.error('Gagal mengajukan draf.');
+        }
+    },
+
+    rejectDraft: async (reason) => {
+        const pkptId = get().pkptId;
+        if (!pkptId) return;
+        try {
+            await api.post(`/pkpt/${pkptId}/reject`, { catatanRevisi: reason });
+            set({ status: 'DRAF', rejectionReason: reason });
+            toast.warning('Draf PKPT Dikembalikan ke Kasubag');
+        } catch (err) {
+            toast.error('Gagal menolak draf.');
+        }
     },
 
     approveDraft: async (signatureName) => {
+        const pkptId = get().pkptId;
+        const authUser = useAuthStore.getState().user;
+        if (!pkptId || !authUser?.pegawaiId) return;
 
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        try {
 
-        const randomHash = 'E-AUDIT-TTE-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString().slice(-4);
+            await api.post(`/pkpt/${pkptId}/approve`, { approvedByInspekturId: authUser.pegawaiId });
 
-        set({
-            status: 'PUBLISHED',
-            tteHash: randomHash,
-            rejectionReason: null
-        });
+            const randomHash = 'E-AUDIT-TTE-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString().slice(-4);
 
-        toast.success('PKPT Disahkan', {
-            description: `Dokumen berhasil ditandatangani secara elektronik (TTE) atas nama ${signatureName}.`
-        });
-    },
-
-    rejectDraft: (reason) => {
-        set({
-            status: 'DRAFT',
-            rejectionReason: reason
-        });
-
-        toast.warning('Draf PKPT Ditolak', {
-            description: 'Dokumen dikembalikan ke Kasubag Perencanaan untuk direvisi.'
-        });
+            set({ status: 'DISETUJUI', tteHash: randomHash, rejectionReason: null });
+            toast.success('PKPT Sah', { description: `Ditandatangani secara elektronik (TTE) atas nama ${signatureName}.` });
+        } catch (err: any) {
+            toast.error('Gagal mengesahkan PKPT', { description: err.response?.data?.message });
+        }
     }
 }));
 
@@ -10421,6 +10614,40 @@ export interface LoginResponse {
         token: string;
         user: User;
     };
+}
+
+--- FILE: src\types\knowledge.type.ts ---
+
+export type DocumentType =
+    | 'REGULASI_INTERNAL'
+    | 'REGULASI_DAERAH'
+    | 'TEMPLATES'
+    | 'LAINNYA'
+    | 'RKA_PERENCANAAN'
+    | 'ADENDUM_JUSTIFIKASI';
+
+export type DocumentStatus = 'DRAF' | 'AKTIF' | 'ARSIP';
+
+export type UIProcessingStatus = 'Uploading' | 'Parsing' | 'Vectorizing' | 'Success' | 'Error';
+
+export interface DocMetadata {
+    id: string;
+    fileSize: number;
+    mimeType: string;
+    totalChunks: number;
+    hash: string;
+}
+
+export interface KnowledgeDoc {
+    id: string;
+    title: string;
+    type: DocumentType;
+    status: DocumentStatus | UIProcessingStatus;
+    filePath: string;
+    createdAt: string;
+    metadata?: DocMetadata;
+
+    progress?: number;
 }
 
 --- FILE: src\types\opd.type.ts ---

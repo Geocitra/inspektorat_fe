@@ -21,9 +21,9 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
     return (
         <div className="space-y-6">
             {/* REJECTION OR DRAFT LOCK BANNER */}
-            {rejectionReason && status === 'DRAFT' && (
+            {rejectionReason && status === 'DRAF' && (
                 <div className="border border-red-200 bg-red-50/50 p-4 rounded-none flex items-start gap-3">
-                    <XCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                    <XCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
                     <div>
                         <h4 className="text-xs font-bold text-red-800">Usulan PKPT Ditolak & Perlu Revisi</h4>
                         <p className="text-red-700 text-xs mt-1 font-semibold leading-relaxed">
@@ -33,9 +33,9 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                 </div>
             )}
 
-            {status !== 'DRAFT' && (
+            {status !== 'DRAF' && (
                 <div className="border border-amber-200 bg-amber-50/30 p-4 rounded-none flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
                     <div>
                         <h4 className="text-xs font-bold text-amber-800">Draf Dikunci</h4>
                         <p className="text-slate-500 text-xs mt-1">
@@ -53,10 +53,10 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                         <p className="text-slate-400 text-[11px] mt-0.5">Penyusunan draf audit daerah berbasis AI RAG.</p>
                     </div>
                     
-                    {status === 'DRAFT' && (
+                    {status === 'DRAF' && (
                         isKasubag ? (
                             <Button
-                                onClick={generateAiPkpt}
+                                onClick={() => generateAiPkpt(2026)}
                                 disabled={isGenerating}
                                 className="bg-blue-600 hover:bg-blue-700 text-xs rounded-none shadow-none"
                             >
@@ -93,10 +93,10 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                 <TableHeader className="bg-slate-50 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent border-b border-slate-200">
                                         <TableHead className="font-bold text-slate-700 text-xs">Program Audit</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[220px]">Objek Pemeriksaan (OPD)</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[140px]">Alokasi Waktu</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[160px]">Anggaran Audit (Rp)</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[100px]">Prioritas</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-55">Objek Pemeriksaan (OPD)</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-35">Alokasi Waktu</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-40">Anggaran Audit (Rp)</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-25">Prioritas</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -105,31 +105,31 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                             <TableCell className="p-2">
                                                 <Input
                                                     value={agenda.namaAudit}
-                                                    disabled={status !== 'DRAFT' || !isKasubag}
+                                                    disabled={status !== 'DRAF' || !isKasubag}
                                                     onChange={(e) => updateAgenda(agenda.id, { namaAudit: e.target.value })}
                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                />
-                                            </TableCell>
-                                            <TableCell className="text-xs text-slate-600 font-medium">
-                                                {agenda.namaOpd}
-                                            </TableCell>
-                                            <TableCell className="p-2">
-                                                <Input
-                                                    value={agenda.alokasiWaktu}
-                                                    disabled={status !== 'DRAFT' || !isKasubag}
-                                                    onChange={(e) => updateAgenda(agenda.id, { alokasiWaktu: e.target.value })}
-                                                    className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                />
-                                            </TableCell>
-                                            <TableCell className="p-2">
-                                                <Input
-                                                    type="number"
-                                                    value={agenda.anggaran}
-                                                    disabled={status !== 'DRAFT' || !isKasubag}
-                                                    onChange={(e) => updateAgenda(agenda.id, { anggaran: Number(e.target.value) })}
-                                                    className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono font-semibold text-slate-700 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                />
-                                            </TableCell>
+                                                 />
+                                             </TableCell>
+                                             <TableCell className="text-xs text-slate-600 font-medium">
+                                                 {agenda.namaOpd}
+                                             </TableCell>
+                                             <TableCell className="p-2">
+                                                 <Input
+                                                     value={agenda.alokasiWaktu}
+                                                     disabled={status !== 'DRAF' || !isKasubag}
+                                                     onChange={(e) => updateAgenda(agenda.id, { alokasiWaktu: e.target.value })}
+                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
+                                                 />
+                                             </TableCell>
+                                             <TableCell className="p-2">
+                                                 <Input
+                                                     type="number"
+                                                     value={agenda.anggaran}
+                                                     disabled={status !== 'DRAF' || !isKasubag}
+                                                     onChange={(e) => updateAgenda(agenda.id, { anggaran: Number(e.target.value) })}
+                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono font-semibold text-slate-700 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
+                                                 />
+                                             </TableCell>
                                             <TableCell>
                                                 <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 border rounded-none ${
                                                     agenda.prioritas === 'Tinggi'
@@ -148,7 +148,7 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                         </div>
 
                         {/* ACTION: SUBMIT TO INSPEKTUR */}
-                        {status === 'DRAFT' && isKasubag && (
+                        {status === 'DRAF' && isKasubag && (
                             <div className="flex justify-end pt-2 border-t border-slate-100">
                                 <Button
                                     onClick={() => {

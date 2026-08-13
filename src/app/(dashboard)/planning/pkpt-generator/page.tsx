@@ -18,11 +18,13 @@ import InspekturApproval from '@/features/planning/components/InspekturApproval'
 export default function PkptGeneratorPage() {
     // 1. Sync data OPD dari Master Data store
     const { opdList } = useOpdStore();
-    const { status, syncWithOpdList } = usePkptStore();
+    const { status, syncWithOpdList, fetchActivePkpt, fetchRiskRanking } = usePkptStore();
 
     useEffect(() => {
         syncWithOpdList(opdList);
-    }, [opdList, syncWithOpdList]);
+        fetchActivePkpt(2026);
+        fetchRiskRanking(2026);
+    }, [opdList, syncWithOpdList, fetchActivePkpt, fetchRiskRanking]);
 
     // 2. Deteksi Role Aktif berdasarkan Login User & URL Override (untuk testing cepat)
     const { user } = useAuthStore();
@@ -91,14 +93,14 @@ export default function PkptGeneratorPage() {
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500 font-semibold">Status Dokumen:</span>
                         <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 border rounded-none ${
-                            status === 'PUBLISHED'
+                            status === 'DISETUJUI'
                                 ? 'bg-green-50 text-green-700 border-green-200'
-                                : status === 'PENDING_APPROVAL'
+                                : status === 'MENUNGGU_PERSETUJUAN'
                                 ? 'bg-amber-50 text-amber-700 border-amber-200'
                                 : 'bg-slate-50 text-slate-600 border-slate-200'
                         }`}>
-                            {status === 'PUBLISHED' ? <ShieldCheck className="w-3.5 h-3.5 text-green-600" /> : null}
-                            {status === 'PUBLISHED' ? 'PUBLISHED' : status === 'PENDING_APPROVAL' ? 'PENDING APPROVAL' : 'DRAFT'}
+                            {status === 'DISETUJUI' ? <ShieldCheck className="w-3.5 h-3.5 text-green-600" /> : null}
+                            {status === 'DISETUJUI' ? 'PUBLISHED' : status === 'MENUNGGU_PERSETUJUAN' ? 'PENDING APPROVAL' : 'DRAFT'}
                         </span>
                     </div>
                 </div>

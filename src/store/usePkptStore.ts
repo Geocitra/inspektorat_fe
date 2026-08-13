@@ -1,14 +1,16 @@
 // src/store/usePkptStore.ts
 import { create } from 'zustand';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { useAuthStore } from './useAuthStore';
 
 export interface OpdRisk {
     opdId: string;
     namaOpd: string;
     kode: string;
-    nri: number; // Nilai Risiko Inheren
-    nfr: number; // Nilai Frekuensi Risiko
-    ntr: number; // Nilai Tingkat Risiko (Skor Akhir)
+    nri: number; 
+    nfr: number; 
+    ntr: number; 
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
 }
 
@@ -22,9 +24,10 @@ export interface AuditAgenda {
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
 }
 
-export type PkptStatus = 'DRAFT' | 'PENDING_APPROVAL' | 'PUBLISHED';
+export type PkptStatus = 'DRAF' | 'MENUNGGU_PERSETUJUAN' | 'DISETUJUI';
 
 interface PkptState {
+    pkptId: string | null;
     riskList: OpdRisk[];
     draftAgendas: AuditAgenda[];
     status: PkptStatus;
@@ -32,16 +35,20 @@ interface PkptState {
     tteHash: string | null;
     isCalculating: boolean;
     isGenerating: boolean;
+    isParsingFile: boolean;
     logs: string[];
     
-    // Actions
+    // Actions Server-Side & Client Sync
     syncWithOpdList: (opds: any[]) => void;
-    recalculateRisks: () => Promise<void>;
-    generateAiPkpt: () => Promise<void>;
-    updateAgenda: (id: string, updated: Partial<AuditAgenda>) => void;
-    submitToInspektur: () => void;
+    fetchActivePkpt: (tahun: number) => Promise<void>;
+    fetchRiskRanking: (tahun: number) => Promise<void>;
+    recalculateRisks: (tahun?: number) => Promise<void>;
+    generateAiPkpt: (tahun?: number) => Promise<void>;
+    parsePkptFromFile: (file: File, tahun: number) => Promise<void>;
+    updateAgenda: (id: string, updated: Partial<AuditAgenda>) => Promise<void>;
+    submitToInspektur: () => Promise<void>;
     approveDraft: (signatureName: string) => Promise<void>;
-    rejectDraft: (reason: string) => void;
+    rejectDraft: (reason: string) => Promise<void>;
 }
 
 // Initial risk seed matching the 3 seeded OPDs
@@ -64,16 +71,18 @@ const calculateNtrAndPriority = (nri: number, nfr: number) => {
 };
 
 export const usePkptStore = create<PkptState>((set, get) => ({
+    pkptId: null,
     riskList: INITIAL_RISKS.map(item => {
         const { ntr, prioritas } = calculateNtrAndPriority(item.nri, item.nfr);
         return { ...item, ntr, prioritas };
     }),
     draftAgendas: [],
-    status: 'DRAFT',
+    status: 'DRAF',
     rejectionReason: null,
     tteHash: null,
     isCalculating: false,
     isGenerating: false,
+    isParsingFile: false,
     logs: [],
 
     // Sync with OPD Master Data to dynamically load newly registered OPDs
@@ -111,143 +120,184 @@ export const usePkptStore = create<PkptState>((set, get) => ({
         set({ riskList: filteredRisks });
     },
 
-    recalculateRisks: async () => {
-        set({ isCalculating: true });
-        
-        // Simulate Math Engine Delay
-        await new Promise((resolve) => setTimeout(resolve, 1500));
-        
-        set((state) => {
-            const updated = state.riskList.map(risk => {
-                // Simulate slight dynamic risk updates (within 1 to 10 limits)
-                const nriDelta = (Math.random() - 0.5) * 0.6;
-                const nfrDelta = (Math.random() - 0.5) * 0.8;
-                
-                const newNri = Number(Math.max(1, Math.min(10, risk.nri + nriDelta)).toFixed(1));
-                const newNfr = Number(Math.max(1, Math.min(10, risk.nfr + nfrDelta)).toFixed(1));
-                
-                const { ntr, prioritas } = calculateNtrAndPriority(newNri, newNfr);
-                return {
-                    ...risk,
-                    nri: newNri,
-                    nfr: newNfr,
-                    ntr,
-                    prioritas
-                };
-            });
-            
-            return {
-                riskList: updated,
-                isCalculating: false
-            };
-        });
-        
-        toast.success('Kalkulasi Selesai', {
-            description: 'Mesin Matematika berhasil memperbarui skor risiko inheren & frekuensi seluruh OPD.'
-        });
+    // 1. Tarik Data Nyata
+    fetchActivePkpt: async (tahun) => {
+        try {
+            const res = await api.get('/pkpt');
+            const pkpts = res.data;
+            const currentPkpt = pkpts.find((p: any) => p.tahunAnggaran === tahun);
+
+            if (currentPkpt) {
+                const mappedAgendas = currentPkpt.agendaAudits.map((a: any) => {
+                    const hp = a.substansiDokumen?.hariPemeriksaan;
+                    const totalHp = hp ? (Number(hp.pj||0) + Number(hp.wkpj||0) + Number(hp.dalnis||0) + Number(hp.kt||0) + Number(hp.at||0)) : 0;
+                    
+                    let prioritas: 'Tinggi'|'Sedang'|'Rendah' = 'Sedang';
+                    const alasan = String(a.substansiDokumen?.alasanPrioritas || '').toLowerCase();
+                    if (alasan.includes('tinggi') || alasan.includes('high')) prioritas = 'Tinggi';
+                    else if (alasan.includes('rendah') || alasan.includes('low')) prioritas = 'Rendah';
+
+                    return {
+                        id: a.id,
+                        namaAudit: a.substansiDokumen?.namaAudit || a.jenisPengawasan,
+                        opdId: a.opdId,
+                        namaOpd: a.opd?.namaOpd || 'Unknown',
+                        alokasiWaktu: a.substansiDokumen?.alokasiWaktu || (totalHp > 0 ? `${totalHp} Hari Pemeriksaan` : `Target Bulan ke-${a.perkiraanBulan}`),
+                        anggaran: Number(a.estimasiAnggaran),
+                        prioritas
+                    };
+                });
+
+                set({ 
+                    pkptId: currentPkpt.id, 
+                    status: currentPkpt.statusPkpt, 
+                    draftAgendas: mappedAgendas,
+                    rejectionReason: currentPkpt.substansiDokumen?.catatanRevisi || null
+                });
+            } else {
+                set({ pkptId: null, status: 'DRAF', draftAgendas: [], rejectionReason: null });
+            }
+        } catch (err) {
+            console.error('Gagal mengambil data PKPT:', err);
+        }
     },
 
-    generateAiPkpt: async () => {
+    fetchRiskRanking: async (tahun) => {
+        try {
+            const res = await api.get(`/pkpt/ranking/${tahun}`);
+            const mapped = res.data.map((r: any) => ({
+                opdId: r.opdId,
+                namaOpd: r.opd?.namaOpd || '',
+                kode: r.opd?.kode || '',
+                nri: Number(r.nri),
+                nfr: Number(r.nfr),
+                ntr: Number(r.ntr),
+                prioritas: Number(r.ntr) >= 7.5 ? 'Tinggi' : Number(r.ntr) >= 5.5 ? 'Sedang' : 'Rendah'
+            }));
+            set({ riskList: mapped });
+        } catch (err) {}
+    },
+
+    // 2. Memicu Kalkulasi Engine Asli di NestJS
+    recalculateRisks: async (tahun: number = 2026) => {
+        set({ isCalculating: true });
+        try {
+            await api.post('/pkpt/calculate-risk', { tahun });
+            await get().fetchRiskRanking(tahun);
+            toast.success('Kalkulasi Selesai', { description: 'Engine berhasil memperbarui skor NTR seluruh OPD.' });
+        } catch (err: any) {
+            toast.error('Gagal Kalkulasi', { description: err.response?.data?.message || 'Error server.' });
+        } finally {
+            set({ isCalculating: false });
+        }
+    },
+
+    // 3. Generate via Ollama RAG (Live)
+    generateAiPkpt: async (tahun: number = 2026) => {
         set({ isGenerating: true, logs: [] });
         const addLog = (text: string) => set(state => ({ logs: [...state.logs, text] }));
         
-        // Simulate AI Pipeline logging
-        const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
-        
-        addLog('[1/6] Mengumpulkan parameter profil risiko seluruh OPD terdaftar...');
-        await delay(500);
-        addLog('[2/6] Membaca data prioritas risiko (Dinas PUPR teridentifikasi sebagai High Risk)...');
-        await delay(500);
-        addLog('[3/6] Memanggil Mesin RAG AI dengan referensi "SOP_Audit_Kinerja_2025"...');
-        await delay(600);
-        addLog('[4/6] Menganalisis korelasi pagu anggaran dan lokasi geografis anti-fraud...');
-        await delay(500);
-        addLog('[5/6] Menyusun draf program kerja audit tahunan berdasarkan alokasi sumber daya...');
-        await delay(400);
-        addLog('[6/6] Memvalidasi draf sesuai skema JSON PKPT daerah... Selesai.');
-        await delay(300);
-
-        const risks = get().riskList;
-        const generatedAgendas: AuditAgenda[] = risks.map((risk, index) => {
-            let namaAudit = '';
-            let alokasiWaktu = '';
-            let anggaran = 0;
+        try {
+            addLog('[1/3] Menghubungi NestJS Backend untuk orkestrasi AI...');
+            addLog('[2/3] Membaca data rujukan Knowledge Base RAG & Profil Risiko OPD...');
             
-            if (risk.prioritas === 'Tinggi') {
-                namaAudit = `Audit Investigatif & Kepatuhan Pembangunan Infrastruktur Fisik (${risk.namaOpd})`;
-                alokasiWaktu = '18 Hari Kerja';
-                anggaran = 120000000; // 120jt
-            } else if (risk.prioritas === 'Sedang') {
-                namaAudit = `Audit Kinerja & Kepatuhan Pengelolaan Anggaran Dekonsentrasi (${risk.namaOpd})`;
-                alokasiWaktu = '12 Hari Kerja';
-                anggaran = 75000000; // 75jt
-            } else {
-                namaAudit = `Review Kepatuhan Belanja Operasional Rutin Harian (${risk.namaOpd})`;
-                alokasiWaktu = '8 Hari Kerja';
-                anggaran = 45000000; // 45jt
-            }
-
-            return {
-                id: `agenda-${index}-${Date.now()}`,
-                namaAudit,
-                opdId: risk.opdId,
-                namaOpd: risk.namaOpd,
-                alokasiWaktu,
-                anggaran,
-                prioritas: risk.prioritas
-            };
-        });
-
-        set({
-            draftAgendas: generatedAgendas,
-            isGenerating: false
-        });
-
-        toast.success('Draf PKPT Berhasil Dibuat', {
-            description: 'AI E-Audit berhasil merekomendasikan program kerja berbasis analisis risiko.'
-        });
+            await api.post('/pkpt/generate-draft', { tahunAnggaran: tahun });
+            
+            addLog('[3/3] Ekstraksi JSON selesai, menyimpan transaksi ke PostgreSQL...');
+            
+            await get().fetchActivePkpt(tahun);
+            toast.success('Draf PKPT Berhasil Dibuat', { description: 'AI E-Audit berhasil menyusun program berdasarkan risiko.' });
+        } catch (err: any) {
+            toast.error('AI Gagal Memproses', { description: err.response?.data?.message || 'Waktu tunggu LLM habis.' });
+        } finally {
+            set({ isGenerating: false });
+        }
     },
 
-    updateAgenda: (id, updated) => {
-        set(state => ({
-            draftAgendas: state.draftAgendas.map(agenda => 
-                agenda.id === id ? { ...agenda, ...updated } : agenda
-            )
-        }));
+    // 4. File Upload (Sudah Live sebelumnya, kita rapikan refresh datanya)
+    parsePkptFromFile: async (file, tahun) => {
+        set({ isParsingFile: true, logs: [] });
+        const addLog = (text: string) => set(state => ({ logs: [...state.logs, text] }));
+
+        try {
+            addLog(`Membaca file biner "${file.name}"...`);
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('tahunAnggaran', tahun.toString());
+
+            await api.post('/pkpt/parse-document', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+            
+            addLog('Ekstraksi dan Fuzzy Match selesai. Merender tabel...');
+            await get().fetchActivePkpt(tahun);
+            
+            toast.success('Ekstraksi Dokumen Berhasil');
+        } catch (error: any) {
+            toast.error('Gagal Ekstraksi PKPT', { description: error.response?.data?.message || error.message });
+        } finally {
+            set({ isParsingFile: false });
+        }
     },
 
-    submitToInspektur: () => {
-        set({ status: 'PENDING_APPROVAL' });
-        toast.info('Draf PKPT Diajukan', {
-            description: 'Dokumen PKPT berhasil dikirim ke meja Inspektur untuk ditinjau.'
-        });
+    // 5. Simpan Editan Manual Kasubag ke Database
+    updateAgenda: async (id, updated) => {
+        try {
+            await api.put(`/pkpt/agenda/${id}`, {
+                jenisPengawasan: updated.namaAudit,
+                estimasiAnggaran: updated.anggaran,
+                substansiDokumen: { 
+                    namaAudit: updated.namaAudit,
+                    alokasiWaktu: updated.alokasiWaktu 
+                }
+            });
+            // Update UI optimistically
+            set(state => ({
+                draftAgendas: state.draftAgendas.map(agenda => agenda.id === id ? { ...agenda, ...updated } : agenda)
+            }));
+        } catch (err) {
+            toast.error('Gagal menyimpan perubahan sel.');
+        }
+    },
+
+    // 6. Alur Persetujuan Resmi
+    submitToInspektur: async () => {
+        const pkptId = get().pkptId;
+        if (!pkptId) return;
+        try {
+            await api.post(`/pkpt/${pkptId}/submit`);
+            set({ status: 'MENUNGGU_PERSETUJUAN' });
+            toast.success('Draf PKPT Diajukan ke Inspektur');
+        } catch (err) {
+            toast.error('Gagal mengajukan draf.');
+        }
+    },
+
+    rejectDraft: async (reason) => {
+        const pkptId = get().pkptId;
+        if (!pkptId) return;
+        try {
+            await api.post(`/pkpt/${pkptId}/reject`, { catatanRevisi: reason });
+            set({ status: 'DRAF', rejectionReason: reason });
+            toast.warning('Draf PKPT Dikembalikan ke Kasubag');
+        } catch (err) {
+            toast.error('Gagal menolak draf.');
+        }
     },
 
     approveDraft: async (signatureName) => {
-        // Simulate digital signature TTE delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        
-        const randomHash = 'E-AUDIT-TTE-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString().slice(-4);
-        
-        set({
-            status: 'PUBLISHED',
-            tteHash: randomHash,
-            rejectionReason: null
-        });
+        const pkptId = get().pkptId;
+        const authUser = useAuthStore.getState().user;
+        if (!pkptId || !authUser?.pegawaiId) return;
 
-        toast.success('PKPT Disahkan', {
-            description: `Dokumen berhasil ditandatangani secara elektronik (TTE) atas nama ${signatureName}.`
-        });
-    },
-
-    rejectDraft: (reason) => {
-        set({
-            status: 'DRAFT',
-            rejectionReason: reason
-        });
-
-        toast.warning('Draf PKPT Ditolak', {
-            description: 'Dokumen dikembalikan ke Kasubag Perencanaan untuk direvisi.'
-        });
+        try {
+            // Asumsikan Inspektur menggunakan pegawaiId-nya
+            await api.post(`/pkpt/${pkptId}/approve`, { approvedByInspekturId: authUser.pegawaiId });
+            
+            const randomHash = 'E-AUDIT-TTE-' + Math.random().toString(36).substring(2, 10).toUpperCase() + '-' + Date.now().toString().slice(-4);
+            
+            set({ status: 'DISETUJUI', tteHash: randomHash, rejectionReason: null });
+            toast.success('PKPT Sah', { description: `Ditandatangani secara elektronik (TTE) atas nama ${signatureName}.` });
+        } catch (err: any) {
+            toast.error('Gagal mengesahkan PKPT', { description: err.response?.data?.message });
+        }
     }
 }));

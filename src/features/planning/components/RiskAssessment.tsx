@@ -40,7 +40,7 @@ export default function RiskAssessment({ isKasubag }: RiskAssessmentProps) {
                 </h3>
                 {isKasubag && (
                     <Button 
-                        onClick={recalculateRisks} 
+                        onClick={() => recalculateRisks(2026)} 
                         disabled={isCalculating}
                         className="bg-blue-600 hover:bg-blue-700 rounded-none text-xs shadow-none"
                     >

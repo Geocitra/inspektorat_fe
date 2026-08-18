@@ -53,7 +53,7 @@ export default function PkptGeneratorPage() {
     const isKasubag = activeRole === 'APIP_INTERNAL';
 
     // Tabs state
-    const [activeTab, setActiveTab] = useState<'risk' | 'generator' | 'approval'>('risk');
+    const [activeTab, setActiveTab] = useState<'risk' | 'generator'>('generator');
 
     if (!mounted) {
         return (
@@ -83,15 +83,15 @@ export default function PkptGeneratorPage() {
 
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
-            {/* HEADER WORKSPACE (Menunjukkan Ruang Kerja sesuai Peran Aktif) */}
+            {/* HEADER WORKSPACE */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
                         <ShieldAlert className="w-6 h-6 text-blue-600" />
-                        Risk-Based Planning & PKPT
+                        Program Kerja Pengawasan Tahunan (PKPT)
                     </h1>
                     <p className="text-slate-500 text-sm mt-1">
-                        Workspace: <strong className="text-blue-600">{isInspektur ? 'Inspektur (Persetujuan & TTE)' : 'Kasubag Perencanaan (Penyusunan Draf)'}</strong>
+                        Manajemen acuan audit tahunan berbasis risiko dan ekstraksi berkas PKPT resmi daerah.
                     </p>
                 </div>
 
@@ -103,15 +103,9 @@ export default function PkptGeneratorPage() {
                     <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-slate-500 font-semibold">Status Dokumen:</span>
-                        <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 border rounded-none ${
-                            status === 'DISETUJUI'
-                                ? 'bg-green-50 text-green-700 border-green-200'
-                                : status === 'MENUNGGU_PERSETUJUAN'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                : 'bg-slate-50 text-slate-600 border-slate-200'
-                        }`}>
-                            {status === 'DISETUJUI' ? <ShieldCheck className="w-3.5 h-3.5 text-green-600" /> : null}
-                            {status === 'DISETUJUI' ? 'PUBLISHED' : status === 'MENUNGGU_PERSETUJUAN' ? 'PENDING APPROVAL' : 'DRAFT'}
+                        <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 border rounded-none bg-green-50 text-green-700 border-green-200">
+                            <ShieldCheck className="w-3.5 h-3.5 text-green-600" />
+                            PUBLISHED / SAH
                         </span>
                     </div>
                 </div>
@@ -119,17 +113,6 @@ export default function PkptGeneratorPage() {
 
             {/* TAB CONTROLLERS */}
             <div className="flex border-b border-slate-200 bg-slate-50">
-                <button
-                    onClick={() => setActiveTab('risk')}
-                    className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-2 transition-all ${
-                        activeTab === 'risk'
-                            ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
-                            : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                >
-                    <Calculator className="w-4 h-4" />
-                    1. Analisis Risiko OPD
-                </button>
                 <button
                     onClick={() => setActiveTab('generator')}
                     className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-2 transition-all ${
@@ -139,25 +122,24 @@ export default function PkptGeneratorPage() {
                     }`}
                 >
                     <Sparkles className="w-4 h-4" />
-                    2. Unggah & Ekstrak PKPT
+                    1. Dokumen & Agenda PKPT
                 </button>
                 <button
-                    onClick={() => setActiveTab('approval')}
-                    className={`px-4 py-3 text-xs font-bold flex items-center gap-2 transition-all ${
-                        activeTab === 'approval'
+                    onClick={() => setActiveTab('risk')}
+                    className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-2 transition-all ${
+                        activeTab === 'risk'
                             ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
                             : 'text-slate-600 hover:bg-slate-100'
                     }`}
                 >
-                    <ShieldCheck className="w-4 h-4" />
-                    3. Persetujuan Inspektur
+                    <Calculator className="w-4 h-4" />
+                    2. Analisis Risiko OPD
                 </button>
             </div>
 
             {/* TAB CONTENTS */}
+            {activeTab === 'generator' && <AiGenerator isKasubag={isKasubag} onSubmitSuccess={() => {}} />}
             {activeTab === 'risk' && <RiskAssessment isKasubag={isKasubag} />}
-            {activeTab === 'generator' && <AiGenerator isKasubag={isKasubag} onSubmitSuccess={() => setActiveTab('approval')} />}
-            {activeTab === 'approval' && <InspekturApproval isInspektur={isInspektur} />}
         </div>
     );
 }

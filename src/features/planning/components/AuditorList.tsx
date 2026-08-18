@@ -1,172 +1,309 @@
 // src/features/planning/components/AuditorList.tsx
 'use client';
 
-import { useState } from 'react';
-import { useAuditorStore } from '@/store/useAuditorStore';
-import { Plus, Trash2, UserCheck, Eye, Search, AlertCircle, Award } from 'lucide-react';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { 
+    Plus, Trash2, UserCheck, Eye, Search, AlertCircle, 
+    Building2, Briefcase, Edit3, Shield, Users, RefreshCw
+} from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
+import { formatUnitKerja } from '@/lib/formatters';
 
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogTrigger } from '@/components/ui/dialog';
 import AuditorFormModal from './AuditorFormModal';
 
-export default function AuditorList() {
-    const { auditorList, deleteAuditor } = useAuditorStore();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [searchQuery, setSearchQuery] = useState('');
+interface PegawaiItem {
+    id: string;
+    nip: string;
+    nama: string;
+    golongan?: string;
+    jabatan?: string;
+    unitKerja?: 'IRBAN_1' | 'IRBAN_2' | 'IRBAN_3' | 'IRBAN_INVESTIGASI' | 'SEKRETARIAT';
+    isAuditorLapangan: boolean;
+    stAuditors?: Array<{ suratTugas: { id: string; nomorSt: string } }>;
+    opd?: { namaOpd: string };
+}
 
-    const filteredAuditors = auditorList.filter(
-        (auditor) =>
-            auditor.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            auditor.nip.includes(searchQuery)
-    );
+const TAB_FILTERS = [
+    { key: 'ALL', label: 'Semua Aparatur' },
+    { key: 'IRBAN_1', label: 'Irban Wilayah I' },
+    { key: 'IRBAN_2', label: 'Irban Wilayah II' },
+    { key: 'IRBAN_3', label: 'Irban Wilayah III' },
+    { key: 'IRBAN_INVESTIGASI', label: 'Irban Investigasi' },
+    { key: 'SEKRETARIAT', label: 'Sekretariat' },
+];
+
+export default function AuditorList() {
+    const [pegawaiList, setPegawaiList] = useState<PegawaiItem[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingPegawai, setEditingPegawai] = useState<PegawaiItem | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [activeTab, setActiveTab] = useState<string>('ALL');
+
+    const fetchPegawai = async () => {
+        setIsLoading(true);
+        try {
+            const res = await api.get('/pegawai');
+            setPegawaiList(res.data || []);
+        } catch (err) {
+            toast.error('Gagal Mengambil Data Pegawai');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchPegawai();
+    }, []);
+
+    const handleDelete = async (pegawai: PegawaiItem) => {
+        if (!confirm(`Apakah Anda yakin ingin menghapus data "${pegawai.nama}"?`)) return;
+        try {
+            await api.delete(`/pegawai/${pegawai.id}`);
+            toast.success('Data Pegawai Dihapus');
+            fetchPegawai();
+        } catch (err: any) {
+            toast.error('Gagal Menghapus Pegawai', {
+                description: err.response?.data?.message || 'Data terkait dengan penugasan lain.'
+            });
+        }
+    };
+
+    const handleOpenEdit = (pegawai: PegawaiItem) => {
+        setEditingPegawai(pegawai);
+        setIsModalOpen(true);
+    };
+
+    const handleOpenCreate = () => {
+        setEditingPegawai(null);
+        setIsModalOpen(true);
+    };
+
+    const filteredPegawai = pegawaiList.filter((pegawai) => {
+        const matchesSearch = 
+            pegawai.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            pegawai.nip.includes(searchQuery) ||
+            (pegawai.jabatan || '').toLowerCase().includes(searchQuery.toLowerCase());
+
+        const matchesTab = activeTab === 'ALL' || pegawai.unitKerja === activeTab;
+
+        return matchesSearch && matchesTab;
+    });
+
+    const getUnitBadge = (unit?: string) => {
+        const formatted = formatUnitKerja(unit);
+        switch (unit) {
+            case 'IRBAN_1':
+                return <span className="text-[11px] font-bold text-blue-700">{formatted}</span>;
+            case 'IRBAN_2':
+                return <span className="text-[11px] font-bold text-indigo-700">{formatted}</span>;
+            case 'IRBAN_3':
+                return <span className="text-[11px] font-bold text-emerald-700">{formatted}</span>;
+            case 'IRBAN_INVESTIGASI':
+                return <span className="text-[11px] font-bold text-purple-700">{formatted}</span>;
+            case 'SEKRETARIAT':
+                return <span className="text-[11px] font-semibold text-slate-600">{formatted}</span>;
+            default:
+                return <span className="text-[11px] font-semibold text-slate-600">{formatted}</span>;
+        }
+    };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-5 max-w-6xl mx-auto">
             {/* HEADER HALAMAN */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Manajemen Auditor</h1>
-                    <p className="text-slate-500 text-sm mt-1">Kelola data fungsional auditor, kualifikasi kompetensi, dan status penugasan Surat Tugas.</p>
+                    <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <Users className="w-5 h-5 text-blue-600" />
+                        Manajemen Aparatur &amp; Auditor APIP
+                    </h1>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                        Kelola data aparatur Inspektorat, pengelompokan unit Irban, dan status personil dinas lapangan.
+                    </p>
                 </div>
 
-                <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-                    <DialogTrigger render={<Button className="bg-blue-600 hover:bg-blue-700 rounded-none font-medium text-sm transition-all shadow-none" />}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Tambah Auditor
-                    </DialogTrigger>
-                    
-                    <AuditorFormModal 
-                        isOpen={isModalOpen} 
-                        onClose={() => setIsModalOpen(false)} 
-                    />
-                </Dialog>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={fetchPegawai}
+                        variant="outline"
+                        disabled={isLoading}
+                        className="rounded-none border-slate-200 text-xs h-8 shadow-none flex items-center gap-1.5"
+                    >
+                        <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
+                        Segarkan
+                    </Button>
+                    <Button 
+                        onClick={handleOpenCreate}
+                        className="bg-blue-600 hover:bg-blue-700 rounded-none font-medium text-xs h-8 transition-all shadow-none flex items-center gap-1.5"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        Tambah Aparatur
+                    </Button>
+                </div>
             </div>
 
-            {/* FILTER SEARCH */}
-            <div className="flex items-center gap-2 border border-slate-200 bg-white p-3 rounded-none">
-                <Search className="w-4 h-4 text-slate-400 ml-1" />
-                <input
-                    type="text"
-                    placeholder="Cari berdasarkan nama auditor atau nomor NIP..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-sm placeholder-slate-400 text-slate-700"
-                />
-            </div>
+            {/* TAB FILTER IRBAN (CLEAN MINIMAL TABS, NO NESTED OVERBOXING) */}
+            <div className="space-y-3">
+                <div className="flex border-b border-slate-200 overflow-x-auto gap-1">
+                    {TAB_FILTERS.map((tab) => {
+                        const count = tab.key === 'ALL' 
+                            ? pegawaiList.length 
+                            : pegawaiList.filter(p => p.unitKerja === tab.key).length;
 
-            {/* TABLE / EMPTY STATE */}
-            <div className="border border-slate-200 bg-white rounded-none">
-                {filteredAuditors.length === 0 ? (
-                    <div className="p-12 text-center flex flex-col items-center justify-center">
-                        <AlertCircle className="w-12 h-12 text-slate-300 mb-3" />
-                        <h3 className="text-base font-bold text-slate-700">Data Auditor Tidak Ditemukan</h3>
-                        <p className="text-slate-400 text-xs mt-1 max-w-sm">
-                            {searchQuery ? 'Tidak ada hasil pencarian yang cocok. Silakan ganti kata kunci pencarian Anda.' : 'Belum ada pejabat fungsional auditor yang terdaftar di dalam sistem.'}
-                        </p>
-                        {!searchQuery && (
-                            <Button
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-blue-600 hover:bg-blue-700 text-xs rounded-none mt-4 shadow-none"
+                        const isActive = activeTab === tab.key;
+
+                        return (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key)}
+                                className={`px-4 py-2 text-xs font-semibold flex items-center gap-1.5 transition-colors border-b-2 whitespace-nowrap ${
+                                    isActive
+                                        ? 'border-blue-600 text-blue-700 font-bold bg-blue-50/40'
+                                        : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                                }`}
                             >
-                                <Plus className="w-3.5 h-3.5 mr-1.5" /> Registrasi Auditor Pertama
-                            </Button>
-                        )}
+                                {tab.label}
+                                <span className={`text-[10px] font-mono ${isActive ? 'text-blue-700' : 'text-slate-400'}`}>
+                                    ({count})
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* SEARCH INPUT BAR */}
+                <div className="flex items-center gap-2 border border-slate-200 bg-white p-2.5 rounded-none">
+                    <Search className="w-4 h-4 text-slate-400 ml-1" />
+                    <input
+                        type="text"
+                        placeholder="Cari berdasarkan nama aparatur, NIP, atau jabatan kedinasan..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="w-full bg-transparent border-0 outline-none text-xs placeholder-slate-400 text-slate-700"
+                    />
+                </div>
+            </div>
+
+            {/* TABLE DATA PEGAWAI (NO INITIAL BOXES, CLEAN ROW DIVIDER) */}
+            <div className="border border-slate-200 bg-white rounded-none overflow-x-auto">
+                {isLoading ? (
+                    <div className="p-12 text-center text-slate-400 text-xs">
+                        <RefreshCw className="w-5 h-5 animate-spin mx-auto mb-2 text-blue-600" />
+                        Memuat data aparatur Inspektorat...
+                    </div>
+                ) : filteredPegawai.length === 0 ? (
+                    <div className="p-12 text-center flex flex-col items-center justify-center">
+                        <AlertCircle className="w-8 h-8 text-slate-300 mb-2" />
+                        <h3 className="text-sm font-bold text-slate-700">Tidak Ada Data Pegawai</h3>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                            {searchQuery ? 'Tidak ada hasil yang sesuai dengan kata kunci pencarian.' : 'Belum ada aparatur yang terdaftar pada unit kerja ini.'}
+                        </p>
                     </div>
                 ) : (
-                    <Table className="border-collapse">
+                    <Table className="border-collapse min-w-[800px]">
                         <TableHeader className="bg-slate-50 border-b border-slate-200">
                             <TableRow className="hover:bg-transparent border-b border-slate-200">
-                                <TableHead className="font-bold text-slate-700 text-xs">Nama Lengkap & NIP</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Kompetensi Inti</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Status Kesiapan</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Tanggal Terdaftar</TableHead>
-                                <TableHead className="text-right font-bold text-slate-700 text-xs w-[120px]">Aksi</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-12 text-center">No</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs min-w-[240px]">Nama Aparatur &amp; NIP</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs min-w-[180px]">Jabatan &amp; Golongan</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-36">Kelompok Wilayah (Irban)</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-32 text-center">Status Lapangan</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-28 text-center">Beban ST</TableHead>
+                                <TableHead className="text-center font-bold text-slate-700 text-xs w-20">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {filteredAuditors.map((auditor) => (
-                                <TableRow key={auditor.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <div className="bg-slate-100 p-2 border border-slate-200 text-slate-600 rounded-none hidden sm:block">
-                                                <UserCheck className="w-4 h-4 text-blue-600" />
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-800 text-sm">{auditor.nama}</p>
-                                                <p className="text-[11px] font-mono text-slate-500">NIP. {auditor.nip}</p>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-wrap gap-1 max-w-sm">
-                                            {auditor.kompetensi.slice(0, 2).map((comp, idx) => (
-                                                <span key={idx} className="inline-flex items-center gap-0.5 text-[10px] font-medium bg-slate-100 text-slate-700 border border-slate-200 px-1.5 py-0.5">
-                                                    <Award className="w-2.5 h-2.5 text-slate-400" />
-                                                    {comp}
+                            {filteredPegawai.map((pegawai, index) => {
+                                const activeStCount = (pegawai.stAuditors || []).length;
+
+                                return (
+                                    <TableRow key={pegawai.id} className="hover:bg-slate-50/60 border-b border-slate-100 last:border-0">
+                                        <TableCell className="font-mono text-xs text-slate-400 text-center">
+                                            {index + 1}
+                                        </TableCell>
+
+                                        {/* Nama & NIP (Clean Text Hierarchy - NO INITIAL AVATAR BOX) */}
+                                        <TableCell className="py-3 px-3">
+                                            <p className="font-bold text-slate-900 text-xs leading-tight">
+                                                {pegawai.nama}
+                                            </p>
+                                            <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+                                                NIP. {pegawai.nip}
+                                            </p>
+                                        </TableCell>
+
+                                        {/* Jabatan & Golongan */}
+                                        <TableCell className="py-3 px-3">
+                                            <p className="text-xs font-medium text-slate-800">{pegawai.jabatan || 'Aparatur APIP'}</p>
+                                            <p className="text-[11px] text-slate-400 font-mono mt-0.5">{pegawai.golongan || '-'}</p>
+                                        </TableCell>
+
+                                        {/* Unit Wilayah Irban */}
+                                        <TableCell className="py-3 px-3">
+                                            {getUnitBadge(pegawai.unitKerja)}
+                                        </TableCell>
+
+                                        {/* Status Lapangan (Subtle Minimal Badge) */}
+                                        <TableCell className="py-3 px-3 text-center">
+                                            {pegawai.isAuditorLapangan ? (
+                                                <span className="text-[11px] font-bold text-emerald-700">
+                                                    Auditor Lapangan
                                                 </span>
-                                            ))}
-                                            {auditor.kompetensi.length > 2 && (
-                                                <span className="text-[9px] font-semibold bg-blue-50 text-blue-600 border border-blue-100 px-1.5 py-0.5">
-                                                    +{auditor.kompetensi.length - 2} Lainnya
+                                            ) : (
+                                                <span className="text-[11px] text-slate-400">
+                                                    Non-Lapangan
                                                 </span>
                                             )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <span className={`inline-flex items-center text-xs font-semibold px-2 py-0.5 border ${
-                                            auditor.status === 'Tersedia'
-                                                ? 'bg-green-50 text-green-700 border-green-200'
-                                                : auditor.status === 'Ditugaskan'
-                                                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                : 'bg-blue-50 text-blue-700 border-blue-200'
-                                        }`}>
-                                            {auditor.status}
-                                        </span>
-                                    </TableCell>
-                                    <TableCell className="text-xs text-slate-500">
-                                        {new Date(auditor.createdAt).toLocaleDateString('id-ID', {
-                                            year: 'numeric',
-                                            month: 'short',
-                                            day: 'numeric',
-                                        })}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-1">
-                                            <Link href={`/planning/master-auditor/${auditor.id}`}>
+                                        </TableCell>
+
+                                        {/* Beban ST (Minimal Clean Font) */}
+                                        <TableCell className="py-3 px-3 text-center font-mono text-xs font-semibold">
+                                            <span className={activeStCount === 0 ? 'text-slate-400' : 'text-amber-700 font-bold'}>
+                                                {activeStCount} ST Aktif
+                                            </span>
+                                        </TableCell>
+
+                                        {/* Aksi Button */}
+                                        <TableCell className="text-center py-2 px-2">
+                                            <div className="flex items-center justify-center gap-1">
                                                 <Button
                                                     variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 rounded-none border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600"
-                                                    title="Profil & Riwayat Penugasan"
+                                                    size="sm"
+                                                    onClick={() => handleOpenEdit(pegawai)}
+                                                    className="h-7 w-7 p-0 rounded-none text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                                    title="Edit Data Pegawai"
                                                 >
-                                                    <Eye className="w-3.5 h-3.5" />
+                                                    <Edit3 className="w-3.5 h-3.5" />
                                                 </Button>
-                                            </Link>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 rounded-none border border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 text-slate-600"
-                                                onClick={() => {
-                                                    if (window.confirm(`Hapus auditor "${auditor.nama}" dari database?`)) {
-                                                        deleteAuditor(auditor.id);
-                                                        toast.success('Terhapus', { description: `Data auditor ${auditor.nama} berhasil dihapus.` });
-                                                    }
-                                                }}
-                                                title="Hapus Data"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleDelete(pegawai)}
+                                                    className="h-7 w-7 p-0 rounded-none text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                                    title="Hapus Pegawai"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
                         </TableBody>
                     </Table>
                 )}
             </div>
+
+            {/* MODAL FORM TAMBAH / EDIT PEGAWAI */}
+            <AuditorFormModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                onSuccess={fetchPegawai}
+                editPegawai={editingPegawai}
+            />
         </div>
     );
 }

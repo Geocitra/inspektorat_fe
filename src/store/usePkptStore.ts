@@ -281,23 +281,66 @@ export const usePkptStore = create<PkptState>((set, get) => ({
         }
     },
 
-    // 5. Simpan Editan Manual Kasubag ke Database
+    // 5. Simpan Editan Manual Kasubag per-baris ke Database
     updateAgenda: async (id, updated) => {
         try {
-            await api.put(`/pkpt/agenda/${id}`, {
-                jenisPengawasan: updated.namaAudit,
-                estimasiAnggaran: updated.anggaran,
-                substansiDokumen: { 
-                    namaAudit: updated.namaAudit,
-                    alokasiWaktu: updated.alokasiWaktu 
+            const current = get().draftAgendas.find(a => a.id === id);
+            const merged = { ...current, ...updated };
+
+            const hp = merged.hariPemeriksaan || {};
+            const totalHp = Number(hp.dalnis || 0) + Number(hp.kt || 0) + Number(hp.at || 0) + Number(hp.pj || 0) + Number(hp.wkpj || 0);
+
+            const payload = {
+                jenisPengawasan: merged.jenisPengawasan,
+                perkiraanBulan: merged.perkiraanBulan || 2,
+                estimasiAnggaran: merged.anggaran || 0,
+                substansiDokumen: {
+                    areaPengawasan: merged.areaPengawasan || merged.namaAudit,
+                    namaAudit: merged.areaPengawasan || merged.namaAudit,
+                    jenisPengawasan: merged.jenisPengawasan,
+                    tujuanSasaran: merged.tujuanSasaran,
+                    ruangLingkup: merged.ruangLingkup,
+                    pelaksana: merged.pelaksana,
+                    jadwal: merged.jadwal,
+                    hariPemeriksaan: {
+                        ...hp,
+                        totalHp: totalHp > 0 ? totalHp : hp.totalHp || 50,
+                    },
+                    jumlahLaporan: merged.jumlahLaporan || 1,
+                    saranaPrasarana: merged.saranaPrasarana || ['Laptop', 'Printer', 'ATK'],
+                    tingkatRisiko: merged.prioritas,
+                    keterangan: merged.keterangan || '',
+                    alasanPrioritas: merged.keterangan || '',
                 }
-            });
-            // Update UI optimistically
+            };
+
+            await api.put(`/pkpt/agenda/${id}`, payload);
+            
+            // Update UI state
             set(state => ({
-                draftAgendas: state.draftAgendas.map(agenda => agenda.id === id ? { ...agenda, ...updated } : agenda)
+                draftAgendas: state.draftAgendas.map(agenda => {
+                    if (agenda.id === id) {
+                        return {
+                            ...agenda,
+                            ...updated,
+                            alokasiWaktu: totalHp > 0 ? `${totalHp} HP (${merged.jadwal || 'TW I'})` : agenda.alokasiWaktu,
+                            hariPemeriksaan: {
+                                ...hp,
+                                totalHp: totalHp > 0 ? totalHp : hp.totalHp || 50,
+                            }
+                        };
+                    }
+                    return agenda;
+                })
             }));
-        } catch (err) {
-            toast.error('Gagal menyimpan perubahan sel.');
+
+            toast.success('Rincian Baris Berhasil Diperbarui', {
+                description: `Agenda untuk ${merged.namaOpd} berhasil disimpan.`
+            });
+        } catch (err: any) {
+            toast.error('Gagal Menyimpan Perubahan', {
+                description: err.response?.data?.message || 'Terjadi kesalahan sistem.'
+            });
         }
     },
 

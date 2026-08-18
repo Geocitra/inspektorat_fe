@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useOpdStore, Opd } from '@/store/useOpdStore';
-import { Plus, Trash2, MapPin, Edit2, Eye, Search, AlertCircle, FileSpreadsheet } from 'lucide-react';
+import { Plus, Trash2, MapPin, Edit2, Eye, Search, AlertCircle, FileSpreadsheet, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
@@ -35,12 +35,17 @@ export default function OpdList() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-5 max-w-6xl mx-auto">
             {/* HEADER HALAMAN */}
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-5">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Master Data OPD</h1>
-                    <p className="text-slate-500 text-sm mt-1">Kelola daftar Organisasi Perangkat Daerah sebagai objek pemeriksaan audit.</p>
+                    <h1 className="text-xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        <Building2 className="w-5 h-5 text-blue-600" />
+                        Master Data Perangkat Daerah (OPD)
+                    </h1>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                        Kelola daftar Organisasi Perangkat Daerah sebagai auditi objek pengawasan APIP.
+                    </p>
                 </div>
 
                 <Dialog open={isModalOpen} onOpenChange={(open) => {
@@ -49,11 +54,11 @@ export default function OpdList() {
                 }}>
                     <DialogTrigger render={
                         <Button 
-                            className="bg-blue-600 hover:bg-blue-700 rounded-none font-medium text-sm transition-all shadow-none" 
+                            className="bg-blue-600 hover:bg-blue-700 rounded-none font-medium text-xs h-8 transition-all shadow-none flex items-center gap-1.5" 
                             onClick={() => setEditingOpd(null)}
                         />
                     }>
-                        <Plus className="w-4 h-4 mr-2" />
+                        <Plus className="w-3.5 h-3.5" />
                         Tambah OPD
                     </DialogTrigger>
                     
@@ -68,118 +73,107 @@ export default function OpdList() {
             </div>
 
             {/* FILTER PENCARIAN */}
-            <div className="flex items-center gap-2 border border-slate-200 bg-white p-3 rounded-none">
+            <div className="flex items-center gap-2 border border-slate-200 bg-white p-2.5 rounded-none">
                 <Search className="w-4 h-4 text-slate-400 ml-1" />
                 <input
                     type="text"
                     placeholder="Cari berdasarkan nama dinas atau kode OPD..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full bg-transparent border-0 outline-none text-sm placeholder-slate-400 text-slate-700"
+                    className="w-full bg-transparent border-0 outline-none text-xs placeholder-slate-400 text-slate-700"
                 />
             </div>
 
-            {/* TABEL DATA / EMPTY STATE */}
-            <div className="border border-slate-200 bg-white rounded-none">
+            {/* TABEL DATA (CLEAN ROW DIVIDERS, NO OVERBOXED CELLS) */}
+            <div className="border border-slate-200 bg-white rounded-none overflow-x-auto">
                 {filteredOpd.length === 0 ? (
                     <div className="p-12 text-center flex flex-col items-center justify-center">
-                        <AlertCircle className="w-12 h-12 text-slate-300 mb-3" />
-                        <h3 className="text-base font-bold text-slate-700">Data OPD Tidak Ditemukan</h3>
-                        <p className="text-slate-400 text-xs mt-1 max-w-sm">
-                            {searchQuery ? 'Tidak ada hasil pencarian yang cocok. Silakan ubah kata kunci pencarian Anda.' : 'Belum ada Organisasi Perangkat Daerah (OPD) yang terdaftar di dalam sistem.'}
+                        <AlertCircle className="w-8 h-8 text-slate-300 mb-2" />
+                        <h3 className="text-sm font-bold text-slate-700">Data OPD Tidak Ditemukan</h3>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                            {searchQuery ? 'Tidak ada hasil pencarian yang cocok. Silakan ganti kata kunci pencarian Anda.' : 'Belum ada Organisasi Perangkat Daerah yang terdaftar di sistem.'}
                         </p>
-                        {!searchQuery && (
-                            <Button 
-                                onClick={() => {
-                                    setEditingOpd(null);
-                                    setIsModalOpen(true);
-                                }}
-                                className="bg-blue-600 hover:bg-blue-700 text-xs rounded-none mt-4 shadow-none"
-                            >
-                                <Plus className="w-3.5 h-3.5 mr-1.5" /> Registrasi OPD Pertama
-                            </Button>
-                        )}
                     </div>
                 ) : (
-                    <Table className="border-collapse">
+                    <Table className="border-collapse min-w-[850px]">
                         <TableHeader className="bg-slate-50 border-b border-slate-200">
                             <TableRow className="hover:bg-transparent border-b border-slate-200">
-                                <TableHead className="w-[50px] font-bold text-slate-700 text-xs">No</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Kode</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Nama OPD</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Pagu Anggaran</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Koordinat GPS</TableHead>
-                                <TableHead className="font-bold text-slate-700 text-xs">Dokumen RKA/Renstra</TableHead>
-                                <TableHead className="text-right font-bold text-slate-700 text-xs w-[140px]">Aksi</TableHead>
+                                <TableHead className="w-12 font-bold text-slate-700 text-xs text-center">No</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-28">Kode</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs min-w-[240px]">Nama Perangkat Daerah</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-40">Pagu Anggaran</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-40">Koordinat GPS</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs w-36">Dokumen RKA</TableHead>
+                                <TableHead className="text-center font-bold text-slate-700 text-xs w-24">Aksi</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {filteredOpd.map((opd, index) => (
-                                <TableRow key={opd.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
-                                    <TableCell className="font-mono text-slate-400 text-xs">{index + 1}</TableCell>
+                                <TableRow key={opd.id} className="hover:bg-slate-50/60 border-b border-slate-100 last:border-0">
+                                    <TableCell className="font-mono text-slate-400 text-xs text-center">{index + 1}</TableCell>
                                     <TableCell className="font-mono font-semibold text-slate-600 text-xs">{opd.kode}</TableCell>
-                                    <TableCell>
+                                    <TableCell className="py-3 px-3">
                                         <div>
-                                            <p className="font-bold text-slate-800 text-sm">{opd.namaOpd}</p>
-                                            <p className="text-[11px] text-slate-500 truncate max-w-xs">{opd.alamat}</p>
+                                            <p className="font-bold text-slate-900 text-xs leading-tight">{opd.namaOpd}</p>
+                                            <p className="text-[11px] text-slate-400 truncate max-w-xs mt-0.5">{opd.alamat}</p>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="font-semibold text-slate-700 text-xs">
+                                    <TableCell className="font-semibold text-slate-800 text-xs font-mono">
                                         {formatRupiah(opd.paguAnggaran)}
                                     </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-1 text-[11px] font-mono text-slate-600 bg-slate-100 px-2 py-1 border border-slate-200 w-fit">
-                                            <MapPin className="w-3 h-3 text-blue-500" />
-                                            {opd.gpsKoordinat}
+                                    <TableCell className="py-3 px-3">
+                                        <div className="flex items-center gap-1.5 text-xs text-slate-600 font-mono">
+                                            <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                                            <span>{opd.gpsKoordinat}</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell>
+                                    <TableCell className="py-3 px-3">
                                         {opd.rkaFileName ? (
-                                            <div className="flex items-center gap-1.5 text-xs text-slate-600">
-                                                <FileSpreadsheet className="w-3.5 h-3.5 text-green-600" />
-                                                <span className="truncate max-w-[130px] font-medium" title={opd.rkaFileName}>
+                                            <div className="flex items-center gap-1.5 text-xs text-slate-700">
+                                                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                                <span className="truncate max-w-[120px] font-medium" title={opd.rkaFileName}>
                                                     {opd.rkaFileName}
                                                 </span>
                                             </div>
                                         ) : (
-                                            <span className="text-[11px] text-slate-400 italic">Belum diunggah</span>
+                                            <span className="text-[11px] text-slate-400 italic">Belum ada</span>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex justify-end gap-1">
+                                    <TableCell className="text-center py-2 px-2">
+                                        <div className="flex items-center justify-center gap-1">
                                             <Link href={`/planning/master-opd/${opd.id}`}>
                                                 <Button
                                                     variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 rounded-none border border-slate-200 hover:bg-slate-100 hover:text-slate-800 text-slate-600"
-                                                    title="Histori & Detail"
+                                                    size="sm"
+                                                    className="h-7 w-7 p-0 rounded-none text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                                                    title="Histori & Detail OPD"
                                                 >
                                                     <Eye className="w-3.5 h-3.5" />
                                                 </Button>
                                             </Link>
                                             <Button
                                                 variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 rounded-none border border-slate-200 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-200 text-slate-600"
+                                                size="sm"
+                                                className="h-7 w-7 p-0 rounded-none text-slate-400 hover:text-amber-600 hover:bg-amber-50"
                                                 onClick={() => {
                                                     setEditingOpd(opd);
                                                     setIsModalOpen(true);
                                                 }}
-                                                title="Edit Data"
+                                                title="Edit Data OPD"
                                             >
                                                 <Edit2 className="w-3.5 h-3.5" />
                                             </Button>
                                             <Button
                                                 variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 rounded-none border border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 text-slate-600"
+                                                size="sm"
+                                                className="h-7 w-7 p-0 rounded-none text-slate-400 hover:text-red-600 hover:bg-red-50"
                                                 onClick={() => {
-                                                    if (window.confirm(`Apakah Anda yakin ingin menghapus OPD "${opd.namaOpd}" dari sistem?`)) {
+                                                    if (window.confirm(`Apakah Anda yakin ingin menghapus OPD "${opd.namaOpd}"?`)) {
                                                         deleteOpd(opd.id);
                                                         toast.success('Terhapus', { description: `Data OPD ${opd.namaOpd} berhasil dihapus.` });
                                                     }
                                                 }}
-                                                title="Hapus Data"
+                                                title="Hapus OPD"
                                             >
                                                 <Trash2 className="w-3.5 h-3.5" />
                                             </Button>

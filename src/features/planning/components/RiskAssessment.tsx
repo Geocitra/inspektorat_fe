@@ -32,6 +32,42 @@ export default function RiskAssessment({ isKasubag }: RiskAssessmentProps) {
                 </div>
             </div>
 
+            {/* METODOLOGI ANALISIS RISIKO CARD */}
+            <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4 shadow-sm">
+                <div className="border-b border-slate-100 pb-2 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                            Panduan Metodologi & Sumber Data Analisis Risiko
+                        </h4>
+                        <p className="text-slate-400 text-[10px] mt-0.5">Penjelasan lengkap mengenai variabel perhitungan, asal usul data, dan landasan regulasi BPKP.</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs leading-relaxed">
+                    <div className="space-y-2 border-r border-slate-100 pr-4 last:border-0 last:pr-0">
+                        <h5 className="font-bold text-slate-850">1. Apa yang Kita Analisis?</h5>
+                        <ul className="list-disc pl-4 space-y-1.5 text-slate-500 text-[11px]">
+                            <li><strong>Nilai Risiko Inheren (NRI):</strong> Mengukur kerentanan bawaan OPD. Terdiri atas besaran pagu anggaran belanja (semakin besar anggaran, semakin rawan salah urus) dan jarak logistik/geografis dinas dari kantor Inspektorat.</li>
+                            <li><strong>Nilai Faktor Risiko (NFR):</strong> Mengukur kelemahan sistem kontrol dinas. Terdiri atas riwayat jumlah temuan audit di LHP sebelumnya dan jumlah rekomendasi perbaikan Inspektorat yang belum mereka tindak lanjuti.</li>
+                        </ul>
+                    </div>
+                    <div className="space-y-2 border-r border-slate-100 pr-4 last:border-0 last:pr-0">
+                        <h5 className="font-bold text-slate-850">2. Dari Mana Sumber Datanya?</h5>
+                        <ul className="list-disc pl-4 space-y-1.5 text-slate-500 text-[11px]">
+                            <li><strong>Pagu & Koordinat (NRI):</strong> Diambil secara real-time dari profil dinas di database (yang disinkronkan langsung dengan data RKA di sistem SIPD dan data lokasi BKD Daerah).</li>
+                            <li><strong>Historis & Tunggakan (NFR):</strong> Dihitung otomatis dari rekam jejak digital Laporan Hasil Pemeriksaan (LHP) dan tabel pemantauan tindak lanjut (TLHP) internal yang tersimpan pada database aplikasi ini.</li>
+                        </ul>
+                    </div>
+                    <div className="space-y-2">
+                        <h5 className="font-bold text-slate-850">3. Mengapa Rumus & Bobot Ini Digunakan?</h5>
+                        <ul className="list-disc pl-4 space-y-1.5 text-slate-500 text-[11px]">
+                            <li><strong>Pembobotan (70% NRI + 30% NFR):</strong> Memberikan prioritas utama pada tingkat dampak kerugian negara (anggaran belanja), kemudian dikalikan dengan kepatuhan dinas (tunggakan temuan) agar penilaian berkeadilan.</li>
+                            <li><strong>Dasar Regulasi:</strong> Mengikuti aturan **Pedoman Perencanaan Pengawasan Berbasis Risiko BPKP** agar penugasan audit efektif menyasar OPD yang paling membutuhkan pengawasan.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             {/* DYNAMIC ACTION ROW */}
             <div className="flex justify-between items-center pb-2">
                 <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1.5">

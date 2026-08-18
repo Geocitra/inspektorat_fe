@@ -28,7 +28,7 @@ api.interceptors.request.use(
         */
         const user = useAuthStore.getState().user;
         if (user) {
-            config.headers['x-mock-role'] = user.role;
+            config.headers['x-mock-role'] = user.role === 'AUDITOR' ? 'APIP_INTERNAL' : user.role;
             config.headers['x-mock-user-id'] = user.id;
             if (user.pegawaiId) {
                 config.headers['x-mock-pegawai-id'] = user.pegawaiId;

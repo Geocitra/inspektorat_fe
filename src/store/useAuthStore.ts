@@ -11,20 +11,34 @@ interface AuthState {
     logout: () => void;
 }
 
+// Helper untuk mengambil data user dari cookies saat inisialisasi
+const getStoredUser = (): User | null => {
+    const stored = Cookies.get('user');
+    if (!stored) return null;
+    try {
+        return JSON.parse(stored) as User;
+    } catch (e) {
+        console.error('Gagal mem-parsing data user dari cookies:', e);
+        return null;
+    }
+};
+
 export const useAuthStore = create<AuthState>((set) => ({
-    user: null, // Data user akan diisi saat login berhasil
+    user: getStoredUser(),
     token: Cookies.get('token') || null, // Ambil dari cookie jika ada
     isAuthenticated: !!Cookies.get('token'),
 
     setAuth: (user: User, token: string) => {
-        // Simpan token ke cookie (kedaluwarsa dalam 1 hari)
+        // Simpan token & data user ke cookie (kedaluwarsa dalam 1 hari)
         Cookies.set('token', token, { expires: 1, secure: true, sameSite: 'strict' });
+        Cookies.set('user', JSON.stringify(user), { expires: 1, secure: true, sameSite: 'strict' });
         set({ user, token, isAuthenticated: true });
     },
 
     logout: () => {
-        // Hapus token saat logout
+        // Hapus token & user data saat logout
         Cookies.remove('token');
+        Cookies.remove('user');
         set({ user: null, token: null, isAuthenticated: false });
 
         // Redirect ke login paksa jika di sisi klien

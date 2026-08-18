@@ -10,8 +10,8 @@ interface KnowledgeState {
     currentDoc: KnowledgeDoc | null;
     isLoadingDocs: boolean;
 
-    fetchDocuments: () => Promise<void>;
-    uploadDocument: (file: File, type: DocumentType, title: string) => Promise<void>;
+    fetchDocuments: (opdId?: string) => Promise<void>;
+    uploadDocument: (file: File, type: DocumentType, title: string, opdId?: string) => Promise<void>;
     deleteDocument: (id: string) => Promise<void>;
     clearCurrentDoc: () => void;
 }
@@ -22,11 +22,12 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     currentDoc: null,
     isLoadingDocs: false,
 
-    // Mengambil data nyata dari PostgreSQL
-    fetchDocuments: async () => {
+    // Mengambil data nyata dari PostgreSQL (opsional filter per OPD)
+    fetchDocuments: async (opdId?: string) => {
         set({ isLoadingDocs: true });
         try {
-            const response = await api.get('/documents');
+            const params = opdId ? `?opdId=${opdId}` : '';
+            const response = await api.get(`/documents${params}`);
             set({ docList: response.data.data, isLoadingDocs: false });
         } catch (error: any) {
             toast.error('Gagal Memuat Data', {
@@ -36,7 +37,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         }
     },
 
-    uploadDocument: async (file: File, type: DocumentType, title: string) => {
+    uploadDocument: async (file: File, type: DocumentType, title: string, opdId?: string) => {
         const tempId = `temp-${Date.now()}`;
         const tempDoc: KnowledgeDoc = {
             id: tempId,
@@ -46,6 +47,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             filePath: '',
             createdAt: new Date().toISOString(),
             progress: 0,
+            opdId: opdId || null,
             metadata: {
                 id: '',
                 fileSize: file.size,
@@ -63,19 +65,20 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             formData.append('file', file);
             formData.append('type', type);
             formData.append('title', title);
+            if (opdId) formData.append('opdId', opdId);
 
             const res = await api.post('/documents/ingest', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            // Backend akan mengembalikan 'hash' sebagai identitas unik file yang diantrekan
-            const expectedHash = res.data.data?.hash;
+            // Ambil jobId dari respon antrean backend
+            const jobId = res.data.data?.jobId;
 
-            // 2. Simulasi Progress Bar Kosmetik (Tertahan di 90% jika DB belum merespons)
+            // 2. Progress bar kosmetik (Limit 90% sebelum DB aktif)
             let currentProgress = 0;
             const visualInterval = setInterval(() => {
-                currentProgress += Math.floor(Math.random() * 15) + 5; // Naik random 5-20%
-                if (currentProgress > 90) currentProgress = 90; // Limit maksimum 90%
+                currentProgress += Math.floor(Math.random() * 15) + 5;
+                if (currentProgress > 90) currentProgress = 90;
 
                 let status: any = 'Parsing';
                 if (currentProgress >= 60) status = 'Vectorizing';
@@ -83,23 +86,34 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 set({ currentDoc: { ...get().currentDoc!, progress: currentProgress, status } });
             }, 1000);
 
-            // 3. Short-Polling: Mengecek status riil dari Backend (tiap 3 detik)
+            // 3. Short-Polling: Mengecek status riil pekerjaan via BullMQ (tiap 2 detik)
             const pollInterval = setInterval(async () => {
                 try {
-                    const listRes = await api.get('/documents');
-                    const docs = listRes.data.data;
+                    const statusRes = await api.get(`/documents/job/${jobId}`);
+                    const jobStatus = statusRes.data.data;
 
-                    // Mencari dokumen kita di database menggunakan hash biner-nya
-                    const foundDoc = docs.find((d: any) => d.metadata?.hash === expectedHash);
-
-                    // Jika AI Worker (BullMQ) sudah menanamkannya ke PostgreSQL
-                    if (foundDoc && foundDoc.status === 'AKTIF') {
+                    if (jobStatus.state === 'failed') {
                         clearInterval(visualInterval);
                         clearInterval(pollInterval);
 
                         set({
                             isProcessing: false,
-                            docList: docs, // Sinkronisasi tabel UI langsung
+                            currentDoc: { ...get().currentDoc!, progress: 0, status: 'Error' }
+                        });
+
+                        toast.error('Gagal Ingesti AI', {
+                            description: jobStatus.failedReason || 'Dokumen gagal diproses (non-OCR atau format tidak cocok).',
+                        });
+                        
+                        await get().fetchDocuments(); // Refresh list
+                    } else if (jobStatus.state === 'completed') {
+                        clearInterval(visualInterval);
+                        clearInterval(pollInterval);
+
+                        await get().fetchDocuments(); // Refresh list
+
+                        set({
+                            isProcessing: false,
                             currentDoc: { ...get().currentDoc!, progress: 100, status: 'Success' }
                         });
 
@@ -110,7 +124,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 } catch (pollError) {
                     console.error('Terjadi gangguan saat memantau status RAG.', pollError);
                 }
-            }, 3000);
+            }, 2000);
 
             // 4. Pengaman Timeout (Batas waktu toleransi worker AI: 2 Menit)
             setTimeout(() => {

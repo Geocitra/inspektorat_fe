@@ -1,6 +1,7 @@
 // src/app/(dashboard)/page.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
@@ -11,6 +12,26 @@ import { Button } from '@/components/ui/button';
 
 export default function DashboardHomePage() {
     const { user } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <div className="space-y-6 max-w-5xl mx-auto">
+                <div className="h-10 bg-slate-100 animate-pulse rounded-none w-64" />
+                <div className="h-20 bg-slate-200 animate-pulse rounded-none" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="h-24 bg-slate-100 animate-pulse rounded-none" />
+                    <div className="h-24 bg-slate-100 animate-pulse rounded-none" />
+                    <div className="h-24 bg-slate-100 animate-pulse rounded-none" />
+                </div>
+            </div>
+        );
+    }
+
     const role = user?.role || 'APIP_INTERNAL';
     const isKasubag = role === 'APIP_INTERNAL';
 

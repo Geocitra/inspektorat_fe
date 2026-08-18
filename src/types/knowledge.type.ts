@@ -6,7 +6,9 @@ export type DocumentType =
     | 'TEMPLATES'
     | 'LAINNYA'
     | 'RKA_PERENCANAAN'
-    | 'ADENDUM_JUSTIFIKASI';
+    | 'ADENDUM_JUSTIFIKASI'
+    | 'RENSTRA'
+    | 'DOKUMEN_PBJ';
 
 export type DocumentStatus = 'DRAF' | 'AKTIF' | 'ARSIP';
 
@@ -29,7 +31,9 @@ export interface KnowledgeDoc {
     filePath: string;
     createdAt: string;
     metadata?: DocMetadata;
+    opdId?: string | null;
+    opd?: { id: string; namaOpd: string } | null;
 
     // Hanya digunakan saat proses upload di UI
     progress?: number;
-}
+}

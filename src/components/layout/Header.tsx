@@ -1,12 +1,28 @@
 // src/components/layout/Header.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/button';
 import { LogOut, User as UserIcon } from 'lucide-react';
 
 export default function Header() {
     const { user, logout } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <h2 className="text-lg font-semibold text-slate-800">Ruang Kerja</h2>
+                </div>
+            </header>
+        );
+    }
 
     return (
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">

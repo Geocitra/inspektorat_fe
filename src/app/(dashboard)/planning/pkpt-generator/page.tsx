@@ -28,30 +28,41 @@ export default function PkptGeneratorPage() {
 
     // 2. Deteksi Role Aktif berdasarkan Login User & URL Override (untuk testing cepat)
     const { user } = useAuthStore();
-    const [activeRole, setActiveRole] = useState<'APIP_INTERNAL' | 'APIP_PIMPINAN'>('APIP_INTERNAL');
+    const [activeRole, setActiveRole] = useState<string>('');
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const urlRole = params.get('role')?.toUpperCase();
-            
-            if (urlRole === 'INSPEKTUR' || urlRole === 'APIP_PIMPINAN') {
-                setActiveRole('APIP_PIMPINAN');
-            } else if (urlRole === 'KASUBAG' || urlRole === 'APIP_INTERNAL') {
-                setActiveRole('APIP_INTERNAL');
-            } else if (user?.role) {
-                if (user.role === 'APIP_PIMPINAN' || user.role === 'APIP_INTERNAL') {
-                    setActiveRole(user.role);
-                }
-            }
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (!mounted) return;
+        const params = new URLSearchParams(window.location.search);
+        const urlRole = params.get('role')?.toUpperCase();
+        
+        if (urlRole === 'INSPEKTUR' || urlRole === 'APIP_PIMPINAN') {
+            setActiveRole('APIP_PIMPINAN');
+        } else if (urlRole === 'KASUBAG' || urlRole === 'APIP_INTERNAL') {
+            setActiveRole('APIP_INTERNAL');
+        } else if (user?.role) {
+            setActiveRole(user.role);
         }
-    }, [user]);
+    }, [user, mounted]);
 
     const isInspektur = activeRole === 'APIP_PIMPINAN';
     const isKasubag = activeRole === 'APIP_INTERNAL';
 
     // Tabs state
     const [activeTab, setActiveTab] = useState<'risk' | 'generator' | 'approval'>('risk');
+
+    if (!mounted) {
+        return (
+            <div className="space-y-6 max-w-6xl mx-auto">
+                <div className="h-16 bg-slate-100 animate-pulse rounded-none" />
+                <div className="h-64 bg-slate-100 animate-pulse rounded-none" />
+            </div>
+        );
+    }
 
     if (activeRole && activeRole !== 'APIP_INTERNAL' && activeRole !== 'APIP_PIMPINAN') {
         return (
@@ -128,7 +139,7 @@ export default function PkptGeneratorPage() {
                     }`}
                 >
                     <Sparkles className="w-4 h-4" />
-                    2. AI PKPT Generator
+                    2. Unggah & Ekstrak PKPT
                 </button>
                 <button
                     onClick={() => setActiveTab('approval')}

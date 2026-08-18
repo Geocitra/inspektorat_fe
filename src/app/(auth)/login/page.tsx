@@ -42,7 +42,9 @@ export default function LoginPage() {
                 ? ('APIP_PIMPINAN' as const) 
                 : isOpd
                 ? ('AUDITEE_OPD' as const)
-                : ('APIP_INTERNAL' as const); // Both Kasubag and Auditor are APIP_INTERNAL
+                : isAuditor
+                ? ('AUDITOR' as const)
+                : ('APIP_INTERNAL' as const);
 
             const mockUser = {
                 id: isPimpinan 
@@ -80,7 +82,7 @@ export default function LoginPage() {
             });
 
             if (role === 'AUDITEE_OPD') {
-                router.push('/portal/tanggapan/st-1');
+                router.push('/portal');
             } else {
                 router.push('/');
             }

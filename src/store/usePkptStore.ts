@@ -14,14 +14,34 @@ export interface OpdRisk {
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
 }
 
+export interface HariPemeriksaan {
+    pj?: number;
+    wkpj?: number;
+    dalnis?: number;
+    kt?: number;
+    at?: number;
+    totalHp?: number;
+}
+
 export interface AuditAgenda {
     id: string;
     namaAudit: string;
     opdId: string;
     namaOpd: string;
+    areaPengawasan: string;
+    jenisPengawasan: string;
+    tujuanSasaran: string;
+    ruangLingkup: string;
+    pelaksana: string;
+    jadwal: string;
+    perkiraanBulan: number;
     alokasiWaktu: string;
+    hariPemeriksaan: HariPemeriksaan;
     anggaran: number;
+    jumlahLaporan: number;
+    saranaPrasarana: string[];
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
+    keterangan?: string;
 }
 
 export type PkptStatus = 'DRAF' | 'MENUNGGU_PERSETUJUAN' | 'DISETUJUI';
@@ -129,22 +149,45 @@ export const usePkptStore = create<PkptState>((set, get) => ({
 
             if (currentPkpt) {
                 const mappedAgendas = currentPkpt.agendaAudits.map((a: any) => {
-                    const hp = a.substansiDokumen?.hariPemeriksaan;
-                    const totalHp = hp ? (Number(hp.pj||0) + Number(hp.wkpj||0) + Number(hp.dalnis||0) + Number(hp.kt||0) + Number(hp.at||0)) : 0;
+                    const sub = a.substansiDokumen || {};
+                    const hp = sub.hariPemeriksaan || {};
+                    const totalHp = hp.totalHp || (Number(hp.pj||0) + Number(hp.wkpj||0) + Number(hp.dalnis||0) + Number(hp.kt||0) + Number(hp.at||0));
                     
-                    let prioritas: 'Tinggi'|'Sedang'|'Rendah' = 'Sedang';
-                    const alasan = String(a.substansiDokumen?.alasanPrioritas || '').toLowerCase();
-                    if (alasan.includes('tinggi') || alasan.includes('high')) prioritas = 'Tinggi';
-                    else if (alasan.includes('rendah') || alasan.includes('low')) prioritas = 'Rendah';
+                    let prioritas: 'Tinggi'|'Sedang'|'Rendah' = 'Tinggi';
+                    if (sub.tingkatRisiko) {
+                        prioritas = sub.tingkatRisiko;
+                    } else {
+                        const alasan = String(sub.alasanPrioritas || '').toLowerCase();
+                        if (alasan.includes('sedang') || alasan.includes('medium')) prioritas = 'Sedang';
+                        else if (alasan.includes('rendah') || alasan.includes('low')) prioritas = 'Rendah';
+                    }
 
                     return {
                         id: a.id,
-                        namaAudit: a.substansiDokumen?.namaAudit || a.jenisPengawasan,
+                        namaAudit: sub.areaPengawasan || a.jenisPengawasan || 'Program Audit',
                         opdId: a.opdId,
                         namaOpd: a.opd?.namaOpd || 'Unknown',
-                        alokasiWaktu: a.substansiDokumen?.alokasiWaktu || (totalHp > 0 ? `${totalHp} Hari Pemeriksaan` : `Target Bulan ke-${a.perkiraanBulan}`),
-                        anggaran: Number(a.estimasiAnggaran),
-                        prioritas
+                        areaPengawasan: sub.areaPengawasan || sub.namaAudit || a.jenisPengawasan || 'Program Kerja OPD',
+                        jenisPengawasan: a.jenisPengawasan || sub.jenisPengawasan || 'Audit Tujuan Tertentu',
+                        tujuanSasaran: sub.tujuanSasaran || 'Pemeriksaan kepatuhan dan akuntabilitas pelaksanaan program.',
+                        ruangLingkup: sub.ruangLingkup || 'Belanja Barang/Jasa & Modal',
+                        pelaksana: sub.pelaksana || 'Irban 1',
+                        jadwal: sub.jadwal || (a.perkiraanBulan ? `TW ${Math.ceil(a.perkiraanBulan / 3)}` : 'TW I'),
+                        perkiraanBulan: a.perkiraanBulan || 2,
+                        alokasiWaktu: totalHp > 0 ? `${totalHp} HP (${sub.jadwal || `TW ${Math.ceil(a.perkiraanBulan / 3)}`})` : `Target Bulan ke-${a.perkiraanBulan}`,
+                        hariPemeriksaan: {
+                            pj: hp.pj || 1,
+                            wkpj: hp.wkpj || 1,
+                            dalnis: hp.dalnis || 10,
+                            kt: hp.kt || 15,
+                            at: hp.at || 30,
+                            totalHp: totalHp || 57,
+                        },
+                        anggaran: Number(a.estimasiAnggaran) || 0,
+                        jumlahLaporan: sub.jumlahLaporan || 1,
+                        saranaPrasarana: Array.isArray(sub.saranaPrasarana) ? sub.saranaPrasarana : ['Laptop', 'Printer', 'ATK'],
+                        prioritas,
+                        keterangan: sub.keterangan || sub.alasanPrioritas || '',
                     };
                 });
 

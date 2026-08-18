@@ -107,12 +107,17 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         toast.info('AI Engine Memproses...', { description: 'Memindai spesialisasi auditor & ketersediaan jadwal...' });
 
         try {
-            const focus = agenda.substansiDokumen?.namaAudit || agenda.jenisPengawasan || 'Audit Pengawasan';
+            const sub = agenda.substansiDokumen || {};
+            const focus = sub.areaPengawasan || sub.namaAudit || agenda.jenisPengawasan || 'Audit Pengawasan';
+            const pelaksana = sub.pelaksana || 'Irban 1';
+
             const recommendationResult = await recommendTeamMutation.mutateAsync({
                 tanggalMulai: tglMulai,
                 tanggalSelesai: tglSelesai,
-                fokusAudit: focus,
-            });
+                fokusAudit: `${focus} (${pelaksana})`,
+                agendaAuditId: selectedPkptId,
+                pelaksana: pelaksana,
+            } as any);
 
             const recs = recommendationResult.recommendation;
             
@@ -219,12 +224,24 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                                     <SelectValue placeholder="Pilih Objek Audit yang Sah" />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent className="rounded-none">
-                                                {activeAgendas.map(agenda => (
-                                                    <SelectItem key={agenda.id} value={agenda.id} className="text-xs">
-                                                        {agenda.substansiDokumen?.namaAudit || agenda.jenisPengawasan} ({agenda.opd?.namaOpd})
-                                                    </SelectItem>
-                                                ))}
+                                            <SelectContent className="rounded-none max-h-60">
+                                                {activeAgendas.map(agenda => {
+                                                    const sub = agenda.substansiDokumen || {};
+                                                    const pelaksana = sub.pelaksana || 'Irban 1';
+                                                    const jadwal = sub.jadwal || 'TW I';
+                                                    return (
+                                                        <SelectItem key={agenda.id} value={agenda.id} className="text-xs py-2">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="font-bold text-slate-800">
+                                                                    {sub.areaPengawasan || sub.namaAudit || agenda.jenisPengawasan}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-500 font-mono">
+                                                                    {agenda.opd?.namaOpd} &bull; <strong className="text-blue-600">{pelaksana}</strong> ({jadwal})
+                                                                </span>
+                                                            </div>
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                         <FormMessage />

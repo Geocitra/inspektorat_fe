@@ -107,7 +107,10 @@ export default function KnowledgeBaseDashboard() {
         if (type === 'REGULASI_INTERNAL') return 'SOP Audit';
         if (type === 'REGULASI_DAERAH') return 'Peraturan Daerah';
         if (type === 'TEMPLATES') return 'Standar Harga / Template';
-        return type.replace('_', ' ');
+        if (type === 'RENSTRA') return 'Renstra OPD';
+        if (type === 'DOKUMEN_PBJ') return 'Dokumen PBJ';
+        if (type === 'RKA_PERENCANAAN') return 'RKA / DPA';
+        return type.replace(/_/g, ' ');
     };
 
     return (
@@ -333,7 +336,7 @@ export default function KnowledgeBaseDashboard() {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={fetchDocuments}
+                        onClick={() => fetchDocuments()}
                         disabled={isLoadingDocs}
                         className="h-6 text-[10px] px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-none"
                     >

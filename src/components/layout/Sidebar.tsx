@@ -1,6 +1,6 @@
-// src/components/layout/Sidebar.tsx
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Building2, Users, BookOpen, ShieldAlert, FileText, ClipboardList, FileCheck, TrendingUp } from 'lucide-react';
@@ -22,6 +22,35 @@ const MENU_ITEMS = [
 export default function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col h-full shadow-xl">
+                <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+                    <h1 className="text-white text-xl font-bold tracking-wider">APIP Suite</h1>
+                </div>
+                <div className="flex-1 py-6 px-4 space-y-2">
+                    <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
+                        Menu Utama
+                    </p>
+                    <div className="h-9 bg-slate-800/40 rounded-none w-full animate-pulse"></div>
+                    <div className="h-9 bg-slate-800/40 rounded-none w-full animate-pulse"></div>
+                    <div className="h-9 bg-slate-800/40 rounded-none w-full animate-pulse"></div>
+                </div>
+                <div className="p-4 border-t border-slate-800">
+                    <p className="text-xs text-center text-slate-500">
+                        Versi 1.0.0 &copy; 2026
+                    </p>
+                </div>
+            </aside>
+        );
+    }
+
     const role = user?.role || 'APIP_INTERNAL';
 
     // Filter menu based on roles in AGENTS.md

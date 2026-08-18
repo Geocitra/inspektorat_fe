@@ -469,6 +469,8 @@ export default function LoginPage() {
                 ? ('APIP_PIMPINAN' as const)
                 : isOpd
                 ? ('AUDITEE_OPD' as const)
+                : isAuditor
+                ? ('AUDITOR' as const)
                 : ('APIP_INTERNAL' as const);
 
             const mockUser = {
@@ -506,7 +508,7 @@ export default function LoginPage() {
             });
 
             if (role === 'AUDITEE_OPD') {
-                router.push('/portal/tanggapan/st-1');
+                router.push('/portal');
             } else {
                 router.push('/');
             }
@@ -654,6 +656,7 @@ export default function DashboardLayout({
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -664,6 +667,26 @@ import { Button } from '@/components/ui/button';
 
 export default function DashboardHomePage() {
     const { user } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <div className="space-y-6 max-w-5xl mx-auto">
+                <div className="h-10 bg-slate-100 animate-pulse rounded-none w-64" />
+                <div className="h-20 bg-slate-200 animate-pulse rounded-none" />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="h-24 bg-slate-100 animate-pulse rounded-none" />
+                    <div className="h-24 bg-slate-100 animate-pulse rounded-none" />
+                    <div className="h-24 bg-slate-100 animate-pulse rounded-none" />
+                </div>
+            </div>
+        );
+    }
+
     const role = user?.role || 'APIP_INTERNAL';
     const isKasubag = role === 'APIP_INTERNAL';
 
@@ -796,7 +819,7 @@ import { useStStore } from '@/store/useStStore';
 import { useAuditorStore } from '@/store/useAuditorStore';
 import { AlertCircle, FileText, UserCheck, ShieldAlert, Sparkles, LogIn } from 'lucide-react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 
 export default function AuditExecutionLayout({
@@ -809,6 +832,7 @@ export default function AuditExecutionLayout({
     const resolvedParams = use(params);
     const { stId } = resolvedParams;
     const pathname = usePathname();
+    const router = useRouter();
 
     const { user } = useAuthStore();
     const { stList } = useStStore();
@@ -865,6 +889,12 @@ export default function AuditExecutionLayout({
     const isKetua = st.ketuaTimId === activeAuditorId;
     const isAnggota = st.anggotaIds.includes(activeAuditorId);
     const isAssigned = isKetua || isAnggota;
+
+    useEffect(() => {
+        if (isAssigned && isKetua && pathname.endsWith('/upload')) {
+            router.replace(`/audit-execution/${stId}/review?role=auditor&type=ketua`);
+        }
+    }, [isAssigned, isKetua, pathname, stId, router]);
 
     const isSystemAuditor = activeRole === 'AUDITOR';
 
@@ -948,16 +978,18 @@ export default function AuditExecutionLayout({
 
             {}
             <div className="flex border-b border-slate-200 bg-slate-50">
-                <Link
-                    href={uploadHref}
-                    className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
-                        pathname.endsWith('/upload')
-                            ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
-                            : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                >
-                    1. Upload SPJ
-                </Link>
+                {!isKetua && (
+                    <Link
+                        href={uploadHref}
+                        className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
+                            pathname.endsWith('/upload')
+                                ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
+                                : 'text-slate-650 hover:bg-slate-100'
+                        }`}
+                    >
+                        1. Upload SPJ
+                    </Link>
+                )}
                 <Link
                     href={analysisHref}
                     className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
@@ -1832,29 +1864,40 @@ export default function PkptGeneratorPage() {
     }, [opdList, syncWithOpdList, fetchActivePkpt, fetchRiskRanking]);
 
     const { user } = useAuthStore();
-    const [activeRole, setActiveRole] = useState<'APIP_INTERNAL' | 'APIP_PIMPINAN'>('APIP_INTERNAL');
+    const [activeRole, setActiveRole] = useState<string>('');
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const urlRole = params.get('role')?.toUpperCase();
+        setMounted(true);
+    }, []);
 
-            if (urlRole === 'INSPEKTUR' || urlRole === 'APIP_PIMPINAN') {
-                setActiveRole('APIP_PIMPINAN');
-            } else if (urlRole === 'KASUBAG' || urlRole === 'APIP_INTERNAL') {
-                setActiveRole('APIP_INTERNAL');
-            } else if (user?.role) {
-                if (user.role === 'APIP_PIMPINAN' || user.role === 'APIP_INTERNAL') {
-                    setActiveRole(user.role);
-                }
-            }
+    useEffect(() => {
+        if (!mounted) return;
+        const params = new URLSearchParams(window.location.search);
+        const urlRole = params.get('role')?.toUpperCase();
+
+        if (urlRole === 'INSPEKTUR' || urlRole === 'APIP_PIMPINAN') {
+            setActiveRole('APIP_PIMPINAN');
+        } else if (urlRole === 'KASUBAG' || urlRole === 'APIP_INTERNAL') {
+            setActiveRole('APIP_INTERNAL');
+        } else if (user?.role) {
+            setActiveRole(user.role);
         }
-    }, [user]);
+    }, [user, mounted]);
 
     const isInspektur = activeRole === 'APIP_PIMPINAN';
     const isKasubag = activeRole === 'APIP_INTERNAL';
 
     const [activeTab, setActiveTab] = useState<'risk' | 'generator' | 'approval'>('risk');
+
+    if (!mounted) {
+        return (
+            <div className="space-y-6 max-w-6xl mx-auto">
+                <div className="h-16 bg-slate-100 animate-pulse rounded-none" />
+                <div className="h-64 bg-slate-100 animate-pulse rounded-none" />
+            </div>
+        );
+    }
 
     if (activeRole && activeRole !== 'APIP_INTERNAL' && activeRole !== 'APIP_PIMPINAN') {
         return (
@@ -1931,7 +1974,7 @@ export default function PkptGeneratorPage() {
                     }`}
                 >
                     <Sparkles className="w-4 h-4" />
-                    2. AI PKPT Generator
+                    2. Unggah & Ekstrak PKPT
                 </button>
                 <button
                     onClick={() => setActiveTab('approval')}
@@ -1956,21 +1999,690 @@ export default function PkptGeneratorPage() {
 
 --- FILE: src\app\(opd)\layout.tsx ---
 
-import React from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useAuthStore } from '@/store/useAuthStore';
+import { cn } from '@/lib/utils';
+import {
+    LayoutDashboard,
+    Building2,
+    MessageSquare,
+    ShieldAlert,
+    LogOut,
+    User as UserIcon,
+    FileText
+} from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export default function OpdPortalLayout({
     children,
 }: {
     children: React.ReactNode;
 }) {
+    const router = useRouter();
+    const pathname = usePathname();
+    const { user, logout } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    useEffect(() => {
+        if (mounted && !user) {
+            router.push('/login');
+        }
+    }, [user, mounted]);
+
+    if (!mounted || !user) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex items-center justify-center text-xs text-slate-400">
+                Memverifikasi sesi portal...
+            </div>
+        );
+    }
+
+    let opdName = 'Organisasi Perangkat Daerah';
+    if (user.email.includes('disdik') || user.email.includes('pendidikan')) {
+        opdName = 'Dinas Pendidikan';
+    } else if (user.email.includes('dinkes') || user.email.includes('kesehatan')) {
+        opdName = 'Dinas Kesehatan';
+    } else if (user.email.includes('dishub') || user.email.includes('perhubungan')) {
+        opdName = 'Dinas Perhubungan';
+    }
+
+    const navItems = [
+        { name: 'Dashboard Portal', href: '/portal', icon: LayoutDashboard },
+        { name: 'Dokumen Perencanaan', href: '/portal/dokumen', icon: FileText },
+        { name: 'Klinik Konsultasi', href: '/portal/konsultasi', icon: MessageSquare, disabled: true },
+        { name: 'Pengaduan WBS', href: '/portal/wbs', icon: ShieldAlert, disabled: true },
+    ];
+
     return (
-        <div className="min-h-screen bg-slate-105 py-8 px-4 font-sans text-slate-800">
-            <div className="max-w-4xl mx-auto space-y-4">
+        <div className="flex h-screen w-full bg-slate-50 overflow-hidden">
+            {}
+            <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col h-full shadow-xl">
                 {}
-                <div className="text-[10px] text-slate-405 text-right font-bold uppercase tracking-wider">
-                    Sistem E-Audit AI &bull; Secure Portal Daerah
+                <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+                    <h1 className="text-white text-xl font-bold tracking-wider">APIP Suite</h1>
                 </div>
-                {children}
+
+                {}
+                <nav className="flex-1 py-6 px-4 space-y-2">
+                    <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
+                        Portal Auditee
+                    </p>
+
+                    {navItems.map((item) => {
+                        const isActive = pathname === item.href;
+                        const content = (
+                            <div
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-2.5 rounded-none text-sm font-medium transition-all duration-200 cursor-pointer relative",
+                                    isActive
+                                        ? "bg-blue-600 text-white"
+                                        : item.disabled
+                                        ? "text-slate-600 cursor-not-allowed opacity-50"
+                                        : "hover:bg-slate-800 hover:text-white"
+                                )}
+                            >
+                                <item.icon className={cn("w-5 h-5", isActive ? "text-white" : "text-slate-400")} />
+                                <span>{item.name}</span>
+                                {item.disabled && (
+                                    <span className="absolute right-3 text-[9px] bg-slate-950 text-slate-500 px-1 py-0.5 font-bold uppercase">
+                                        Segera
+                                    </span>
+                                )}
+                            </div>
+                        );
+
+                        if (item.disabled) {
+                            return <div key={item.name}>{content}</div>;
+                        }
+
+                        return (
+                            <Link key={item.name} href={item.href}>
+                                {content}
+                            </Link>
+                        );
+                    })}
+                </nav>
+
+                {}
+                <div className="p-4 border-t border-slate-800 text-[10px] text-center text-slate-500">
+                    Versi 1.0.0 &copy; 2026
+                </div>
+            </aside>
+
+            {}
+            <div className="flex flex-col flex-1 min-w-0">
+                {}
+                <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">
+                    <div className="flex items-center gap-4">
+                        <h2 className="text-lg font-semibold text-slate-800">{opdName}</h2>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        {}
+                        <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <div className="p-2 bg-slate-100 rounded-full">
+                                <UserIcon className="w-4 h-4" />
+                            </div>
+                            <div className="hidden sm:block">
+                                <p className="font-medium text-slate-800">{user.email}</p>
+                                <p className="text-xs text-slate-500 capitalize">OPD / Auditee</p>
+                            </div>
+                        </div>
+
+                        <div className="h-6 w-px bg-slate-200 mx-2"></div>
+
+                        {}
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => logout()}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 font-semibold"
+                        >
+                            <LogOut className="w-4 h-4 mr-2" />
+                            Keluar
+                        </Button>
+                    </div>
+                </header>
+
+                {}
+                <main className="flex-1 overflow-auto p-6 bg-slate-50">
+                    {children}
+                </main>
+            </div>
+        </div>
+    );
+}
+
+--- FILE: src\app\(opd)\portal\page.tsx ---
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store/useAuthStore';
+import { api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { LogOut, Building2, ClipboardList, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
+import Link from 'next/link';
+
+export default function OpdPortalDashboard() {
+    const router = useRouter();
+    const { user, logout } = useAuthStore();
+    const [sts, setSts] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const fetchSuratTugas = async () => {
+        setIsLoading(true);
+        try {
+            const res = await api.get('/surat-tugas');
+            setSts(res.data || []);
+        } catch (error) {
+            console.error('Gagal mengambil data Surat Tugas:', error);
+            toast.error('Koneksi Gagal', { description: 'Gagal mengambil data penugasan dari server.' });
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!user) {
+            router.push('/login');
+            return;
+        }
+        fetchSuratTugas();
+    }, [user]);
+
+    if (!user) return null;
+
+    const myOpdSts = sts.filter((st) => st.agendaAudit?.opdId === user.opdId);
+
+    const opdName = myOpdSts.length > 0
+        ? myOpdSts[0].agendaAudit?.opd?.namaOpd
+        : 'Organisasi Perangkat Daerah (OPD)';
+
+    const activeAudits = myOpdSts.filter((st) => !st.lhp);
+
+    const completedAudits = myOpdSts.filter((st) => st.lhp);
+
+    return (
+        <div className="space-y-6">
+            <div className="border-b border-slate-200 pb-3">
+                <h1 className="text-xl font-bold text-slate-800 tracking-tight">Ringkasan Agenda Pengawasan</h1>
+                <p className="text-slate-500 text-xs mt-1">Pantau status pemeriksaan aktif dan selesaikan tindak lanjut temuan LHP.</p>
+            </div>
+
+            {}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Card className="rounded-none border-slate-200 shadow-none">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-xs font-bold uppercase text-slate-500 tracking-wider">Audit Aktif / NHP</CardTitle>
+                        <ClipboardList className="h-4 h-4 text-blue-600" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-slate-800">{activeAudits.length}</div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-normal">
+                            Agenda pengawasan yang memerlukan tanggapan formal dinas.
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-none border-slate-200 shadow-none">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-xs font-bold uppercase text-slate-500 tracking-wider">Tindak Lanjut (LHP)</CardTitle>
+                        <RefreshCw className="h-4 h-4 text-amber-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-slate-800">{completedAudits.length}</div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-normal">
+                            LHP terbit yang memerlukan unggah berkas bukti penyelesaian.
+                        </p>
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-none border-slate-200 shadow-none">
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-xs font-bold uppercase text-slate-500 tracking-wider">Status Kepatuhan</CardTitle>
+                        <CheckCircle2 className="h-4 h-4 text-emerald-500" />
+                    </CardHeader>
+                    <CardContent>
+                        <div className="text-2xl font-bold text-slate-800">
+                            {completedAudits.length > 0 ? 'Aktif' : 'N/A'}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1 leading-normal">
+                            Tingkat penyelesaian rekomendasi perbaikan dari Inspektorat.
+                        </p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {}
+            <Card className="rounded-none border-slate-200 shadow-none">
+                <CardHeader className="border-b border-slate-100 bg-slate-50">
+                    <CardTitle className="text-sm font-bold text-slate-800">Agenda Pengawasan & Tanggapan NHP</CardTitle>
+                    <CardDescription className="text-xs text-slate-400">
+                        Berikut adalah daftar penugasan aktif Inspektorat untuk dinas Anda. Silakan isi tanggapan sebelum batas waktu penyusunan LHP berakhir.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {isLoading ? (
+                        <div className="p-8 text-center text-xs text-slate-400">Memuat data penugasan...</div>
+                    ) : activeAudits.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
+                            <AlertCircle className="w-8 h-8 text-slate-300" />
+                            <span>Saat ini tidak ada pemeriksaan aktif atau draf NHP yang memerlukan respon dinas Anda.</span>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr className="border-b border-slate-200 bg-slate-100 text-slate-550 font-bold uppercase tracking-wider text-[10px]">
+                                        <th className="p-3 pl-6">Nomor Surat Tugas</th>
+                                        <th className="p-3">Jenis Pengawasan</th>
+                                        <th className="p-3">Tanggal Mulai</th>
+                                        <th className="p-3 text-right pr-6">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {activeAudits.map((st) => (
+                                        <tr key={st.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                            <td className="p-3 pl-6 font-semibold text-slate-700">{st.nomorSt}</td>
+                                            <td className="p-3">{st.agendaAudit?.jenisPengawasan || 'Audit'}</td>
+                                            <td className="p-3">
+                                                {new Date(st.tanggalMulai).toLocaleDateString('id-ID', { dateStyle: 'medium' })}
+                                            </td>
+                                            <td className="p-3 text-right pr-6">
+                                                <Link href={`/portal/tanggapan/${st.id}`}>
+                                                    <Button className="rounded-none bg-blue-600 hover:bg-blue-700 text-[10px] h-7 px-2.5 shadow-none gap-1">
+                                                        <span>Tulis Tanggapan</span>
+                                                        <ExternalLink className="w-3 h-3" />
+                                                    </Button>
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {}
+            <Card className="rounded-none border-slate-200 shadow-none">
+                <CardHeader className="border-b border-slate-100 bg-slate-50">
+                    <CardTitle className="text-sm font-bold text-slate-800">Tindak Lanjut Laporan Hasil Pemeriksaan (TLHP)</CardTitle>
+                    <CardDescription className="text-xs text-slate-400">
+                        Daftar LHP formal yang telah terbit. Anda wajib mengunggah bukti perbaikan secara berkala untuk menyelesaikan temuan rekomendasi.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {isLoading ? (
+                        <div className="p-8 text-center text-xs text-slate-400">Memuat data penugasan...</div>
+                    ) : completedAudits.length === 0 ? (
+                        <div className="p-8 text-center text-xs text-slate-400 flex flex-col items-center gap-2">
+                            <CheckCircle2 className="w-8 h-8 text-slate-300" />
+                            <span>Dinas Anda bersih dari temuan LHP historis yang tertunda. Kepatuhan 100%.</span>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse text-xs">
+                                <thead>
+                                    <tr className="border-b border-slate-200 bg-slate-100 text-slate-550 font-bold uppercase tracking-wider text-[10px]">
+                                        <th className="p-3 pl-6">Nomor LHP</th>
+                                        <th className="p-3">Surat Tugas</th>
+                                        <th className="p-3">Tanggal Terbit LHP</th>
+                                        <th className="p-3 text-right pr-6">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {completedAudits.map((st) => (
+                                        <tr key={st.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                            <td className="p-3 pl-6 font-semibold text-slate-700">{st.lhp?.nomorLhp || 'N/A'}</td>
+                                            <td className="p-3 text-slate-500">{st.nomorSt}</td>
+                                            <td className="p-3">
+                                                {st.lhp?.signedAt
+                                                    ? new Date(st.lhp.signedAt).toLocaleDateString('id-ID', { dateStyle: 'medium' })
+                                                    : 'N/A'
+                                                }
+                                            </td>
+                                            <td className="p-3 text-right pr-6">
+                                                <Link href={`/portal/tlhp/${st.id}`}>
+                                                    <Button className="rounded-none bg-amber-600 hover:bg-amber-700 text-[10px] h-7 px-2.5 shadow-none gap-1 text-white">
+                                                        <span>Unggah Bukti (TLHP)</span>
+                                                        <ExternalLink className="w-3 h-3" />
+                                                    </Button>
+                                                </Link>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+        </div>
+    );
+}
+
+--- FILE: src\app\(opd)\portal\dokumen\page.tsx ---
+
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
+import { useKnowledgeStore } from '@/store/useKnowledgeStore';
+import { DocumentType, KnowledgeDoc } from '@/types/knowledge.type';
+import { toast } from 'sonner';
+import {
+    FileText, Upload, Brain, Trash2, CheckCircle, Loader2, X,
+    FileSpreadsheet, Info, AlertCircle
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+const DOC_CATEGORIES: { label: string; type: DocumentType; description: string }[] = [
+    { label: 'Renstra', type: 'RENSTRA', description: 'Rencana Strategis OPD (5 Tahun)' },
+    { label: 'RKA / DPA', type: 'RKA_PERENCANAAN', description: 'Rencana Kerja Anggaran / Dokumen Pelaksanaan' },
+];
+
+export default function PortalDokumenPage() {
+    const { user } = useAuthStore();
+    const { docList, isProcessing, currentDoc, isLoadingDocs, fetchDocuments, uploadDocument, deleteDocument } = useKnowledgeStore();
+
+    const [selectedDocType, setSelectedDocType] = useState<DocumentType>('RENSTRA');
+    const [dragOver, setDragOver] = useState(false);
+    const [mounted, setMounted] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    const opdId = user?.opdId;
+
+    useEffect(() => {
+        if (mounted && opdId) {
+            fetchDocuments(opdId);
+        }
+    }, [mounted, opdId, fetchDocuments]);
+
+    const opdDocuments = docList.filter(doc => doc.opdId === opdId);
+
+    if (!mounted) {
+        return (
+            <div className="space-y-6 max-w-4xl mx-auto">
+                <div className="h-10 bg-slate-100 animate-pulse rounded-none w-72" />
+                <div className="h-48 bg-slate-100 animate-pulse rounded-none" />
+            </div>
+        );
+    }
+
+    if (!opdId) {
+        return (
+            <div className="max-w-md mx-auto my-12 text-center p-8 border border-slate-200 bg-white rounded-none">
+                <AlertCircle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+                <h2 className="text-lg font-bold text-slate-800">Akun Belum Terhubung ke OPD</h2>
+                <p className="text-slate-500 text-xs mt-2 mb-6 leading-relaxed">
+                    Akun Anda belum terhubung ke Organisasi Perangkat Daerah. Hubungi Kasubag Perencanaan untuk mengaitkan akun Anda.
+                </p>
+            </div>
+        );
+    }
+
+    const formatBytes = (bytes?: number) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const getLabelForType = (type: DocumentType) => {
+        const cat = DOC_CATEGORIES.find(c => c.type === type);
+        return cat?.label || type.replace(/_/g, ' ');
+    };
+
+    const getStatusBadge = (doc: KnowledgeDoc) => {
+        const status = doc.status;
+        if (status === 'AKTIF' || status === 'Success') {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle className="w-3 h-3" /> Aktif
+                </span>
+            );
+        }
+        if (status === 'Uploading' || status === 'Parsing' || status === 'Vectorizing') {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200">
+                    <Loader2 className="w-3 h-3 animate-spin" /> {status}
+                </span>
+            );
+        }
+        if (status === 'Error') {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-red-50 text-red-700 border border-red-200">
+                    <X className="w-3 h-3" /> Gagal
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200">
+                {status}
+            </span>
+        );
+    };
+
+    const handleFileUpload = async (file: File) => {
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (!ext || !allowedExtensions.includes(ext)) {
+            toast.error('Format Tidak Didukung', {
+                description: 'Harap unggah berkas PDF, Word, Excel, atau TXT.'
+            });
+            return;
+        }
+        await uploadDocument(file, selectedDocType, file.name, opdId);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files?.[0]) {
+            handleFileUpload(e.dataTransfer.files[0]);
+        }
+    };
+
+    return (
+        <div className="space-y-6 max-w-4xl mx-auto">
+            {}
+            <div className="border-b border-slate-200 pb-5">
+                <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+                    <FileText className="w-6 h-6 text-blue-600" />
+                    Dokumen Perencanaan Dinas
+                </h1>
+                <p className="text-slate-500 text-sm mt-1">
+                    Unggah dokumen Renstra dan RKA dinas Anda untuk dianalisis oleh sistem AI audit internal.
+                </p>
+            </div>
+
+            {}
+            <div className="bg-blue-50 border border-blue-200 p-4 flex gap-3">
+                <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-blue-800 space-y-1">
+                    <p className="font-bold">Mengapa perlu mengunggah dokumen?</p>
+                    <p className="text-blue-700 leading-relaxed">
+                        Dokumen Renstra dan RKA akan diproses oleh AI untuk membandingkan program kerja dengan realisasi anggaran.
+                        Ini membantu tim audit mengidentifikasi potensi ketidaksesuaian secara otomatis — bukan untuk menilai, melainkan untuk memastikan transparansi.
+                    </p>
+                </div>
+            </div>
+
+            {}
+            <div className="border border-slate-200 bg-white rounded-none p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-blue-600" />
+                    <div>
+                        <h3 className="text-sm font-bold text-slate-800">Unggah Dokumen</h3>
+                        <p className="text-[11px] text-slate-500">Pilih kategori dokumen, lalu seret berkas ke area di bawah</p>
+                    </div>
+                </div>
+
+                {}
+                <div className="flex gap-2 flex-wrap">
+                    {DOC_CATEGORIES.map(cat => (
+                        <button
+                            key={cat.type}
+                            onClick={() => setSelectedDocType(cat.type)}
+                            className={`px-3 py-1.5 text-xs font-semibold border transition-all ${
+                                selectedDocType === cat.type
+                                    ? 'bg-blue-600 text-white border-blue-600'
+                                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                            }`}
+                        >
+                            {cat.label}
+                        </button>
+                    ))}
+                </div>
+
+                {}
+                <div
+                    onClick={() => !isProcessing && fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={handleDrop}
+                    className={`border-2 border-dashed p-8 text-center cursor-pointer transition-all ${
+                        isProcessing
+                            ? 'border-blue-300 bg-blue-50/30 cursor-wait'
+                            : dragOver
+                            ? 'border-blue-500 bg-blue-50'
+                            : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
+                    }`}
+                >
+                    {isProcessing ? (
+                        <div className="space-y-2">
+                            <Loader2 className="w-8 h-8 text-blue-500 mx-auto animate-spin" />
+                            <p className="text-xs font-bold text-blue-700">
+                                Memproses: {currentDoc?.title}
+                            </p>
+                            <p className="text-[11px] text-blue-500">
+                                {currentDoc?.status} — {currentDoc?.progress || 0}%
+                            </p>
+                            <div className="w-64 mx-auto bg-slate-200 h-1.5">
+                                <div
+                                    className="bg-blue-600 h-1.5 transition-all duration-500"
+                                    style={{ width: `${currentDoc?.progress || 0}%` }}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-2">
+                            <Upload className="w-8 h-8 text-slate-400 mx-auto" />
+                            <p className="text-xs font-bold text-slate-700">
+                                Seret & Lepas berkas {getLabelForType(selectedDocType)} di sini
+                            </p>
+                            <p className="text-[11px] text-slate-400">
+                                PDF, Word, Excel, atau TXT • Maks 50 MB
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                />
+            </div>
+
+            {}
+            <div className="border border-slate-200 bg-white rounded-none">
+                <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Dokumen yang Telah Diunggah
+                    </h3>
+                    <span className="text-[10px] font-mono text-slate-400">
+                        {opdDocuments.length} berkas
+                    </span>
+                </div>
+
+                {isLoadingDocs ? (
+                    <div className="p-8 text-center">
+                        <Loader2 className="w-6 h-6 text-slate-400 mx-auto animate-spin" />
+                        <p className="text-xs text-slate-500 mt-2">Memuat daftar dokumen...</p>
+                    </div>
+                ) : opdDocuments.length === 0 ? (
+                    <div className="p-8 text-center">
+                        <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-600">Belum Ada Dokumen</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                            Unggah dokumen Renstra atau RKA dinas Anda menggunakan area di atas.
+                        </p>
+                    </div>
+                ) : (
+                    <Table className="border-collapse">
+                        <TableHeader className="bg-slate-50 border-b border-slate-200">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="w-[40px] font-bold text-slate-700 text-xs">No</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs">Nama Berkas</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs">Kategori</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs">Ukuran</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs">Status</TableHead>
+                                <TableHead className="font-bold text-slate-700 text-xs text-right w-[80px]">Aksi</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {opdDocuments.map((doc, idx) => (
+                                <TableRow key={doc.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
+                                    <TableCell className="font-mono text-slate-400 text-xs">{idx + 1}</TableCell>
+                                    <TableCell>
+                                        <p className="text-xs font-semibold text-slate-800 truncate max-w-[200px]" title={doc.title}>
+                                            {doc.title}
+                                        </p>
+                                    </TableCell>
+                                    <TableCell>
+                                        <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 border border-slate-200">
+                                            {getLabelForType(doc.type)}
+                                        </span>
+                                    </TableCell>
+                                    <TableCell className="text-xs text-slate-600 font-mono">
+                                        {formatBytes(doc.metadata?.fileSize)}
+                                    </TableCell>
+                                    <TableCell>
+                                        {getStatusBadge(doc)}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-7 w-7 rounded-none border border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 text-slate-500"
+                                            onClick={() => {
+                                                if (window.confirm(`Hapus dokumen "${doc.title}"?`)) {
+                                                    deleteDocument(doc.id);
+                                                }
+                                            }}
+                                            title="Hapus Dokumen"
+                                        >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        </Button>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                )}
             </div>
         </div>
     );
@@ -2016,12 +2728,28 @@ export default function OpdTlhpPortalPage({ params }: { params: Promise<{ stId: 
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
 import { Button } from '@/components/ui/button';
 import { LogOut, User as UserIcon } from 'lucide-react';
 
 export default function Header() {
     const { user, logout } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">
+                <div className="flex items-center gap-4">
+                    <h2 className="text-lg font-semibold text-slate-800">Ruang Kerja</h2>
+                </div>
+            </header>
+        );
+    }
 
     return (
         <header className="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between flex-shrink-0 shadow-sm">
@@ -2053,9 +2781,9 @@ export default function Header() {
 }
 
 --- FILE: src\components\layout\Sidebar.tsx ---
-
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, Building2, Users, BookOpen, ShieldAlert, FileText, ClipboardList, FileCheck, TrendingUp } from 'lucide-react';
@@ -2077,6 +2805,35 @@ const MENU_ITEMS = [
 export default function Sidebar() {
     const pathname = usePathname();
     const { user } = useAuthStore();
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    if (!mounted) {
+        return (
+            <aside className="w-64 bg-slate-900 text-slate-300 flex-shrink-0 hidden md:flex flex-col h-full shadow-xl">
+                <div className="h-16 flex items-center px-6 border-b border-slate-800 bg-slate-950">
+                    <h1 className="text-white text-xl font-bold tracking-wider">APIP Suite</h1>
+                </div>
+                <div className="flex-1 py-6 px-4 space-y-2">
+                    <p className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">
+                        Menu Utama
+                    </p>
+                    <div className="h-9 bg-slate-800/40 rounded-none w-full animate-pulse"></div>
+                    <div className="h-9 bg-slate-800/40 rounded-none w-full animate-pulse"></div>
+                    <div className="h-9 bg-slate-800/40 rounded-none w-full animate-pulse"></div>
+                </div>
+                <div className="p-4 border-t border-slate-800">
+                    <p className="text-xs text-center text-slate-500">
+                        Versi 1.0.0 &copy; 2026
+                    </p>
+                </div>
+            </aside>
+        );
+    }
+
     const role = user?.role || 'APIP_INTERNAL';
 
     const visibleMenuItems = MENU_ITEMS.filter((item) => {
@@ -2148,9 +2905,6 @@ export default function Sidebar() {
         </aside>
     );
 }
-
---- FILE: src\components\shared\LoadingSpinner.tsx ---
-
 
 --- FILE: src\components\ui\button.tsx ---
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
@@ -5035,12 +5789,17 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         toast.info('AI Engine Memproses...', { description: 'Memindai spesialisasi auditor & ketersediaan jadwal...' });
 
         try {
-            const focus = agenda.substansiDokumen?.namaAudit || agenda.jenisPengawasan || 'Audit Pengawasan';
+            const sub = agenda.substansiDokumen || {};
+            const focus = sub.areaPengawasan || sub.namaAudit || agenda.jenisPengawasan || 'Audit Pengawasan';
+            const pelaksana = sub.pelaksana || 'Irban 1';
+
             const recommendationResult = await recommendTeamMutation.mutateAsync({
                 tanggalMulai: tglMulai,
                 tanggalSelesai: tglSelesai,
-                fokusAudit: focus,
-            });
+                fokusAudit: `${focus} (${pelaksana})`,
+                agendaAuditId: selectedPkptId,
+                pelaksana: pelaksana,
+            } as any);
 
             const recs = recommendationResult.recommendation;
 
@@ -5145,12 +5904,24 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                                     <SelectValue placeholder="Pilih Objek Audit yang Sah" />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent className="rounded-none">
-                                                {activeAgendas.map(agenda => (
-                                                    <SelectItem key={agenda.id} value={agenda.id} className="text-xs">
-                                                        {agenda.substansiDokumen?.namaAudit || agenda.jenisPengawasan} ({agenda.opd?.namaOpd})
-                                                    </SelectItem>
-                                                ))}
+                                            <SelectContent className="rounded-none max-h-60">
+                                                {activeAgendas.map(agenda => {
+                                                    const sub = agenda.substansiDokumen || {};
+                                                    const pelaksana = sub.pelaksana || 'Irban 1';
+                                                    const jadwal = sub.jadwal || 'TW I';
+                                                    return (
+                                                        <SelectItem key={agenda.id} value={agenda.id} className="text-xs py-2">
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <span className="font-bold text-slate-800">
+                                                                    {sub.areaPengawasan || sub.namaAudit || agenda.jenisPengawasan}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-500 font-mono">
+                                                                    {agenda.opd?.namaOpd} &bull; <strong className="text-blue-600">{pelaksana}</strong> ({jadwal})
+                                                                </span>
+                                                            </div>
+                                                        </SelectItem>
+                                                    );
+                                                })}
                                             </SelectContent>
                                         </Select>
                                         <FormMessage />
@@ -5820,11 +6591,18 @@ export default function SuratTugasTte({ st, isInspektur, onClose }: SuratTugasTt
 
 'use client';
 
-import { usePkptStore } from '@/store/usePkptStore';
-import { Sparkles, RefreshCw, AlertCircle, XCircle, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { usePkptStore, AuditAgenda } from '@/store/usePkptStore';
+import {
+    RefreshCw, AlertCircle, XCircle, CheckCircle2, Eye,
+    FileText, Shield, Users, Laptop, Printer, Car,
+    FileSpreadsheet, Wrench, ChevronDown, ChevronUp, Layers,
+    Clock, Calendar, Sparkles
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface AiGeneratorProps {
     isKasubag: boolean;
@@ -5833,9 +6611,22 @@ interface AiGeneratorProps {
 
 export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorProps) {
     const {
-        draftAgendas, status, rejectionReason, isGenerating, logs,
-        generateAiPkpt, updateAgenda, submitToInspektur
+        draftAgendas, status, rejectionReason, isParsingFile, logs,
+        parsePkptFromFile, updateAgenda, submitToInspektur
     } = usePkptStore();
+
+    const [selectedAgenda, setSelectedAgenda] = useState<AuditAgenda | null>(null);
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+    const getSaranaIcon = (item: string) => {
+        const lower = item.toLowerCase();
+        if (lower.includes('laptop') || lower.includes('komputer')) return <Laptop className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+        if (lower.includes('printer')) return <Printer className="w-3.5 h-3.5 text-indigo-600 shrink-0" />;
+        if (lower.includes('kendaraan') || lower.includes('mobil') || lower.includes('motor')) return <Car className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+        if (lower.includes('kertas') || lower.includes('atk')) return <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+        if (lower.includes('ukur') || lower.includes('alat')) return <Wrench className="w-3.5 h-3.5 text-slate-600 shrink-0" />;
+        return <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />;
+    };
 
     return (
         <div className="space-y-6">
@@ -5858,7 +6649,7 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                     <div>
                         <h4 className="text-xs font-bold text-amber-800">Draf Dikunci</h4>
                         <p className="text-slate-500 text-xs mt-1">
-                            Dokumen sedang diajukan atau sudah diterbitkan. Untuk merombak usulan, Inspektur harus menolak berkas terlebih dahulu agar kembali ke status DRAFT.
+                            Dokumen sedang diajukan atau sudah disetujui. Untuk merombak usulan, Inspektur harus menolak berkas terlebih dahulu agar kembali ke status DRAFT.
                         </p>
                     </div>
                 </div>
@@ -5868,22 +6659,38 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
             <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
                     <div>
-                        <h3 className="text-sm font-bold text-slate-800">Workspace AI PKPT</h3>
-                        <p className="text-slate-400 text-[11px] mt-0.5">Penyusunan draf audit daerah berbasis AI RAG.</p>
+                        <h3 className="text-sm font-bold text-slate-800">Draf Program Kerja Pengawasan Tahunan (PKPT)</h3>
+                        <p className="text-slate-400 text-[11px] mt-0.5">Struktur 14 kolom resmi pengawasan berbasis risiko.</p>
                     </div>
 
                     {status === 'DRAF' && (
                         isKasubag ? (
-                            <Button
-                                onClick={() => generateAiPkpt(2026)}
-                                disabled={isGenerating}
-                                className="bg-blue-600 hover:bg-blue-700 text-xs rounded-none shadow-none"
-                            >
-                                <Sparkles className="w-4 h-4 mr-1.5" />
-                                {isGenerating ? 'AI Sedang Memproses...' : 'Generate Draf PKPT via AI'}
-                            </Button>
+                            <div className="flex gap-2">
+                                <div className="relative">
+                                    <input
+                                        type="file"
+                                        accept=".xlsx,.xls,.pdf,.docx,.doc"
+                                        className="hidden"
+                                        id="pkpt-upload-input"
+                                        onChange={async (e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                await parsePkptFromFile(e.target.files[0], 2026);
+                                            }
+                                        }}
+                                        disabled={isParsingFile}
+                                    />
+                                    <Button
+                                        onClick={() => document.getElementById('pkpt-upload-input')?.click()}
+                                        disabled={isParsingFile}
+                                        className="bg-blue-600 hover:bg-blue-700 text-xs rounded-none shadow-none gap-1.5"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${isParsingFile ? 'animate-spin' : ''}`} />
+                                        {isParsingFile ? 'Mengekstraksi PKPT...' : 'Unggah & Ekstrak Berkas PKPT'}
+                                    </Button>
+                                </div>
+                            </div>
                         ) : (
-                            <span className="text-xs text-slate-400 italic">Hanya Kasubag Perencanaan yang dapat men-generate draf AI</span>
+                            <span className="text-xs text-slate-400 italic">Hanya Kasubag Perencanaan yang dapat mengelola draf PKPT</span>
                         )
                     )}
                 </div>
@@ -5892,7 +6699,7 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                 {logs.length > 0 && (
                     <div className="bg-slate-950 border border-slate-800 p-4 font-mono text-[11px] text-emerald-400 rounded-none space-y-1 max-h-40 overflow-y-auto">
                         <p className="text-slate-500 text-[10px] border-b border-slate-900 pb-1 mb-2 uppercase font-bold tracking-widest flex items-center gap-1.5">
-                            <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+                            <RefreshCw className={`w-3 h-3 ${isParsingFile ? 'animate-spin' : ''}`} />
                             AI Engine Terminal Console
                         </p>
                         {logs.map((log, idx) => (
@@ -5900,57 +6707,64 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                 <span className="text-slate-600 font-bold">&gt;&gt;</span> {log}
                             </p>
                         ))}
-                        {isGenerating && <span className="inline-block w-2 h-3 bg-emerald-400 animate-pulse"></span>}
+                        {isParsingFile && <span className="inline-block w-2 h-3 bg-emerald-400 animate-pulse"></span>}
                     </div>
                 )}
 
                 {}
                 {draftAgendas.length > 0 ? (
                     <div className="space-y-4">
-                        <div className="border border-slate-200 rounded-none">
-                            <Table className="border-collapse">
+                        <div className="border border-slate-200 rounded-none overflow-x-auto">
+                            <Table className="border-collapse min-w-[900px]">
                                 <TableHeader className="bg-slate-50 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent border-b border-slate-200">
-                                        <TableHead className="font-bold text-slate-700 text-xs">Program Audit</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-55">Objek Pemeriksaan (OPD)</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-35">Alokasi Waktu</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-40">Anggaran Audit (Rp)</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-25">Prioritas</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-12 text-center">No</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs min-w-[220px]">Area Pengawasan & Objek (OPD)</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs min-w-[180px]">Jenis Pengawasan</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-28">Pelaksana</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-24 text-center">Jadwal</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-28 text-center">Total HP</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-24 text-center">Risiko</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-20 text-center">Rincian</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {draftAgendas.map((agenda) => (
+                                    {draftAgendas.map((agenda, index) => (
                                         <TableRow key={agenda.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
-                                            <TableCell className="p-2">
-                                                <Input
-                                                    value={agenda.namaAudit}
-                                                    disabled={status !== 'DRAF' || !isKasubag}
-                                                    onChange={(e) => updateAgenda(agenda.id, { namaAudit: e.target.value })}
-                                                    className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-bold text-slate-800 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                 />
-                                             </TableCell>
-                                             <TableCell className="text-xs text-slate-600 font-medium">
-                                                 {agenda.namaOpd}
-                                             </TableCell>
-                                             <TableCell className="p-2">
-                                                 <Input
-                                                     value={agenda.alokasiWaktu}
-                                                     disabled={status !== 'DRAF' || !isKasubag}
-                                                     onChange={(e) => updateAgenda(agenda.id, { alokasiWaktu: e.target.value })}
-                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                 />
-                                             </TableCell>
-                                             <TableCell className="p-2">
-                                                 <Input
-                                                     type="number"
-                                                     value={agenda.anggaran}
-                                                     disabled={status !== 'DRAF' || !isKasubag}
-                                                     onChange={(e) => updateAgenda(agenda.id, { anggaran: Number(e.target.value) })}
-                                                     className="rounded-none border-0 hover:bg-slate-50 focus:bg-white text-xs font-mono font-semibold text-slate-700 focus:ring-1 focus:ring-blue-500 h-8 disabled:bg-transparent disabled:opacity-100"
-                                                 />
-                                             </TableCell>
-                                            <TableCell>
-                                                <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 border rounded-none ${
+                                            <TableCell className="font-mono text-xs text-slate-400 text-center font-medium">
+                                                {index + 1}
+                                            </TableCell>
+                                            <TableCell className="p-3">
+                                                <div>
+                                                    <p className="font-bold text-slate-800 text-xs leading-snug">
+                                                        {agenda.areaPengawasan || agenda.namaAudit}
+                                                    </p>
+                                                    <p className="text-[11px] text-blue-600 font-semibold mt-0.5 flex items-center gap-1">
+                                                        <Shield className="w-3 h-3 text-blue-500" />
+                                                        {agenda.namaOpd}
+                                                    </p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="p-3">
+                                                <span className="text-xs text-slate-700 font-medium">
+                                                    {agenda.jenisPengawasan}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-3">
+                                                <span className="text-xs font-mono font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 border border-slate-200 inline-block">
+                                                    {agenda.pelaksana || 'Irban 1'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-3 text-center">
+                                                <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 border border-blue-200 inline-block">
+                                                    {agenda.jadwal || 'TW I'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-3 text-center font-mono text-xs font-bold text-slate-800">
+                                                {agenda.hariPemeriksaan?.totalHp || 50} HP
+                                            </TableCell>
+                                            <TableCell className="text-center p-3">
+                                                <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 border rounded-none ${
                                                     agenda.prioritas === 'Tinggi'
                                                         ? 'bg-red-50 text-red-700 border-red-200'
                                                         : agenda.prioritas === 'Sedang'
@@ -5960,6 +6774,20 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                                     {agenda.prioritas}
                                                 </span>
                                             </TableCell>
+                                            <TableCell className="text-center p-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedAgenda(agenda);
+                                                        setIsDetailOpen(true);
+                                                    }}
+                                                    className="h-7 w-7 p-0 rounded-none border border-slate-200 hover:bg-blue-50 hover:text-blue-700 text-slate-500"
+                                                    title="Lihat 14 Kolom Lengkap"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -5968,7 +6796,10 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
 
                         {}
                         {status === 'DRAF' && isKasubag && (
-                            <div className="flex justify-end pt-2 border-t border-slate-100">
+                            <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                                <p className="text-xs text-slate-500">
+                                    Total <strong className="text-slate-800">{draftAgendas.length} agenda pengawasan</strong> siap diajukan ke Inspektur.
+                                </p>
                                 <Button
                                     onClick={() => {
                                         submitToInspektur();
@@ -5977,23 +6808,127 @@ export default function AiGenerator({ isKasubag, onSubmitSuccess }: AiGeneratorP
                                     className="bg-green-600 hover:bg-green-700 text-xs rounded-none font-bold shadow-none"
                                 >
                                     <CheckCircle2 className="w-4 h-4 mr-1.5" />
-                                    Ajukan ke Inspektur
+                                    Ajukan Usulan ke Inspektur
                                 </Button>
                             </div>
                         )}
                     </div>
                 ) : (
-                    <div className="p-12 text-center flex flex-col items-center justify-center">
-                        <AlertCircle className="w-10 h-10 text-slate-300 mb-2" />
-                        <h4 className="text-xs font-bold text-slate-700">Draf PKPT Belum Tersusun</h4>
-                        <p className="text-slate-400 text-xs mt-1 max-w-xs">
-                            {isKasubag
-                                ? 'Silakan jalankan generator AI untuk merancang program kerja berdasarkan parameter risiko OPD terdaftar.'
-                                : 'Menunggu Kasubag Perencanaan menyusun draf program kerja.'}
+                    <div className="p-8 text-center border border-dashed border-slate-200 bg-slate-50/50">
+                        <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                        <p className="text-xs font-bold text-slate-600">Belum Ada Draf PKPT Terdaftar</p>
+                        <p className="text-[11px] text-slate-400 mt-1 max-w-md mx-auto">
+                            Silakan unggah dokumen PKPT (Excel / PDF) milik daerah untuk mengekstrak seluruh agenda pengawasan secara otomatis.
                         </p>
                     </div>
                 )}
             </div>
+
+            {}
+            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                <DialogContent className="max-w-2xl rounded-none p-0 overflow-hidden border-slate-300">
+                    <DialogHeader className="bg-slate-900 text-white p-4">
+                        <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-blue-400" />
+                            Rincian Standar 14 Kolom Agenda Pengawasan
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {selectedAgenda && (
+                        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700 divide-y divide-slate-100">
+                            {}
+                            <div className="space-y-1 pb-3">
+                                <span className="text-[10px] font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 border border-blue-200">
+                                    {selectedAgenda.pelaksana || 'Irban 1'} • {selectedAgenda.jadwal || 'TW I'}
+                                </span>
+                                <h4 className="text-sm font-bold text-slate-900 mt-1.5">{selectedAgenda.areaPengawasan}</h4>
+                                <p className="text-slate-500 font-medium">Perangkat Daerah: <strong className="text-slate-800">{selectedAgenda.namaOpd}</strong></p>
+                            </div>
+
+                            {}
+                            <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jenis Pengawasan</p>
+                                    <p className="font-semibold text-slate-800 mt-0.5">{selectedAgenda.jenisPengawasan}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ruang Lingkup</p>
+                                    <p className="font-semibold text-slate-800 mt-0.5">{selectedAgenda.ruangLingkup || 'Semua Belanja Kegiatan'}</p>
+                                </div>
+                            </div>
+
+                            {}
+                            <div className="pt-3 space-y-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                    Tujuan & Sasaran Pemeriksaan
+                                </p>
+                                <div className="bg-slate-50 p-3 border border-slate-200 font-sans text-slate-700 whitespace-pre-line leading-relaxed">
+                                    {selectedAgenda.tujuanSasaran || 'Pemeriksaan kepatuhan dan akuntabilitas pelaksanaan program kerja.'}
+                                </div>
+                            </div>
+
+                            {}
+                            <div className="pt-3 space-y-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                    Matriks Alokasi Hari Pemeriksaan (HP Tim)
+                                </p>
+                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">PJ</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.pj || 1}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">WK PJ</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.wkpj || 1}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">Dalnis</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.dalnis || 10}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">Ketua Tim</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.kt || 15}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">Anggota</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.at || 30}</p>
+                                    </div>
+                                    <div className="bg-blue-50 border border-blue-200 p-2">
+                                        <p className="text-[10px] text-blue-600 font-bold">Total HP</p>
+                                        <p className="text-sm font-mono font-bold text-blue-800">{selectedAgenda.hariPemeriksaan?.totalHp || 57}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {}
+                            <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Sarana dan Prasarana</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {selectedAgenda.saranaPrasarana && selectedAgenda.saranaPrasarana.length > 0 ? (
+                                            selectedAgenda.saranaPrasarana.map((item, idx) => (
+                                                <span key={idx} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 border border-slate-200 font-medium">
+                                                    {getSaranaIcon(item)}
+                                                    {item}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="text-slate-400 italic">Laptop, Printer, ATK</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jumlah Laporan (JUM LAP)</p>
+                                    <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedAgenda.jumlahLaporan || 1} Laporan Hasil Audit</p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">Tingkat Risiko: <strong className="text-slate-700">{selectedAgenda.prioritas}</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
@@ -6499,9 +7434,11 @@ export default function AuditorList() {
 'use client';
 
 import { useState } from 'react';
-import { usePkptStore } from '@/store/usePkptStore';
+import { usePkptStore, AuditAgenda } from '@/store/usePkptStore';
 import {
-    ShieldCheck, AlertCircle, XCircle, RefreshCw, CheckCircle2
+    ShieldCheck, AlertCircle, XCircle, RefreshCw, Eye,
+    Layers, Users, Shield, Laptop, Printer, Car, FileSpreadsheet,
+    Wrench, FileText, CheckCircle2, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -6522,17 +7459,21 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
     const [rejectionInput, setRejectionInput] = useState('');
     const [isSigning, setIsSigning] = useState(false);
     const [signingProgress, setSigningProgress] = useState(0);
+    const [selectedAgenda, setSelectedAgenda] = useState<AuditAgenda | null>(null);
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
 
-    const formatRupiah = (num: number) => {
-        return new Intl.NumberFormat('id-ID', {
-            style: 'currency',
-            currency: 'IDR',
-            minimumFractionDigits: 0,
-        }).format(num);
-    };
-
-    const totalAnggaran = draftAgendas.reduce((sum, item) => sum + item.anggaran, 0);
     const highRiskCount = draftAgendas.filter(item => item.prioritas === 'Tinggi').length;
+    const totalHpKeseluruhan = draftAgendas.reduce((sum, item) => sum + (item.hariPemeriksaan?.totalHp || 50), 0);
+
+    const getSaranaIcon = (item: string) => {
+        const lower = item.toLowerCase();
+        if (lower.includes('laptop') || lower.includes('komputer')) return <Laptop className="w-3.5 h-3.5 text-blue-600 shrink-0" />;
+        if (lower.includes('printer')) return <Printer className="w-3.5 h-3.5 text-indigo-600 shrink-0" />;
+        if (lower.includes('kendaraan') || lower.includes('mobil') || lower.includes('motor')) return <Car className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
+        if (lower.includes('kertas') || lower.includes('atk')) return <FileSpreadsheet className="w-3.5 h-3.5 text-amber-600 shrink-0" />;
+        if (lower.includes('ukur') || lower.includes('alat')) return <Wrench className="w-3.5 h-3.5 text-slate-600 shrink-0" />;
+        return <FileText className="w-3.5 h-3.5 text-slate-500 shrink-0" />;
+    };
 
     const handleSignTTE = async () => {
         setIsSigning(true);
@@ -6572,17 +7513,17 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                 <div className="p-4">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Usulan Audit</p>
                     <p className="text-xl font-bold text-slate-800 mt-1">{draftAgendas.length} Objek Kerja</p>
-                    <p className="text-[10px] text-slate-500">Sesuai draf AI</p>
+                    <p className="text-[10px] text-slate-500">14 Kolom Standar Pengawasan</p>
                 </div>
                 <div className="p-4">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Prioritas Risiko Tinggi</p>
                     <p className="text-xl font-bold text-red-600 mt-1">{highRiskCount} OPD High Risk</p>
-                    <p className="text-[10px] text-slate-500">Kategori NTR Tinggi</p>
+                    <p className="text-[10px] text-slate-500">Kategori NTR Tertinggi</p>
                 </div>
                 <div className="p-4">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Akumulasi Anggaran</p>
-                    <p className="text-xl font-bold text-slate-800 mt-1">{formatRupiah(totalAnggaran)}</p>
-                    <p className="text-[10px] text-slate-500">Total usulan operasional</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Akumulasi Beban Kerja Tim</p>
+                    <p className="text-xl font-bold text-slate-800 mt-1">{totalHpKeseluruhan} Hari Pemeriksaan</p>
+                    <p className="text-[10px] text-slate-500">Total Hari Pemeriksaan (JUM HP)</p>
                 </div>
             </div>
 
@@ -6609,7 +7550,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                     </div>
                 )}
 
-                 {}
+                {}
                 {status === 'MENUNGGU_PERSETUJUAN' && (
                     <div className="space-y-4">
                         <div className="border border-amber-200 bg-amber-50/20 p-4 rounded-none flex items-start gap-3">
@@ -6617,7 +7558,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                             <div>
                                 <h4 className="text-xs font-bold text-amber-800">Menunggu Pengesahan Dokumen</h4>
                                 <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-                                    Draf PKPT telah diajukan. Tinjau dokumen secara menyeluruh. Sebagai Inspektur, Anda dapat membubuhkan **Tanda Tangan Elektronik (TTE)** untuk mensahkan or **Menolak** draf jika diperlukan revisi anggaran.
+                                    Draf PKPT telah diajukan. Tinjau dokumen secara menyeluruh. Sebagai Inspektur, Anda dapat membubuhkan <strong>Tanda Tangan Elektronik (TTE)</strong> untuk mensahkan atau <strong>Menolak</strong> draf jika diperlukan revisi alokasi waktu/fokus pengawasan.
                                 </p>
                             </div>
                         </div>
@@ -6643,7 +7584,7 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                             </div>
                         ) : (
                             <div className="bg-slate-50 border border-slate-200 p-3 text-center text-xs text-slate-500 italic rounded-none leading-relaxed">
-                                Status: **MENUNGGU PERSETUJUAN INSPEKTUR**. Aksi persetujuan hanya dapat dilakukan oleh akun dengan peran pimpinan (Inspektur).
+                                Status: <strong>MENUNGGU PERSETUJUAN INSPEKTUR</strong>. Aksi persetujuan hanya dapat dilakukan oleh akun dengan peran pimpinan (Inspektur).
                             </div>
                         )}
                     </div>
@@ -6693,29 +7634,58 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                 {}
                 {draftAgendas.length > 0 && (
                     <div className="space-y-3 pt-2">
-                        <h4 className="text-xs font-bold text-slate-700">Daftar Usulan Audit Terlampir:</h4>
-                        <div className="border border-slate-200 rounded-none">
-                            <Table className="border-collapse">
+                        <h4 className="text-xs font-bold text-slate-700">Daftar Usulan Pengawasan Terlampir:</h4>
+                        <div className="border border-slate-200 rounded-none overflow-x-auto">
+                            <Table className="border-collapse min-w-[850px]">
                                 <TableHeader className="bg-slate-50 border-b border-slate-200">
                                     <TableRow className="hover:bg-transparent border-b border-slate-200">
-                                        <TableHead className="font-bold text-slate-700 text-xs">Program Audit</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs">Objek OPD</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[140px]">Alokasi Waktu</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[160px]">Anggaran Audit</TableHead>
-                                        <TableHead className="font-bold text-slate-700 text-xs w-[100px]">Prioritas</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-12 text-center">No</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs min-w-[220px]">Area Pengawasan & Objek (OPD)</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs min-w-[180px]">Jenis Pengawasan</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-28">Pelaksana</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-24 text-center">Jadwal</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-28 text-center">Total HP</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-24 text-center">Risiko</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-20 text-center">Rincian</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {draftAgendas.map((agenda) => (
+                                    {draftAgendas.map((agenda, index) => (
                                         <TableRow key={agenda.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
-                                            <TableCell className="text-xs font-bold text-slate-800">{agenda.namaAudit}</TableCell>
-                                            <TableCell className="text-xs text-slate-600 font-medium">{agenda.namaOpd}</TableCell>
-                                            <TableCell className="text-xs font-mono text-slate-600">{agenda.alokasiWaktu}</TableCell>
-                                            <TableCell className="text-xs font-mono font-semibold text-slate-700">
-                                                {formatRupiah(agenda.anggaran)}
+                                            <TableCell className="font-mono text-xs text-slate-400 text-center font-medium">
+                                                {index + 1}
                                             </TableCell>
-                                            <TableCell>
-                                                <span className={`inline-flex items-center text-[9px] font-bold px-1.5 py-0.5 border rounded-none ${
+                                            <TableCell className="p-3">
+                                                <div>
+                                                    <p className="font-bold text-slate-800 text-xs leading-snug">
+                                                        {agenda.areaPengawasan || agenda.namaAudit}
+                                                    </p>
+                                                    <p className="text-[11px] text-blue-600 font-semibold mt-0.5 flex items-center gap-1">
+                                                        <Shield className="w-3 h-3 text-blue-500" />
+                                                        {agenda.namaOpd}
+                                                    </p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="p-3">
+                                                <span className="text-xs text-slate-700 font-medium">
+                                                    {agenda.jenisPengawasan}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-3">
+                                                <span className="text-xs font-mono font-semibold bg-slate-100 text-slate-700 px-2 py-0.5 border border-slate-200 inline-block">
+                                                    {agenda.pelaksana || 'Irban 1'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-3 text-center">
+                                                <span className="text-xs font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 border border-blue-200 inline-block">
+                                                    {agenda.jadwal || 'TW I'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="p-3 text-center font-mono text-xs font-bold text-slate-800">
+                                                {agenda.hariPemeriksaan?.totalHp || 50} HP
+                                            </TableCell>
+                                            <TableCell className="text-center p-3">
+                                                <span className={`inline-flex items-center text-[10px] font-bold px-2 py-0.5 border rounded-none ${
                                                     agenda.prioritas === 'Tinggi'
                                                         ? 'bg-red-50 text-red-700 border-red-200'
                                                         : agenda.prioritas === 'Sedang'
@@ -6725,6 +7695,20 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                                                     {agenda.prioritas}
                                                 </span>
                                             </TableCell>
+                                            <TableCell className="text-center p-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedAgenda(agenda);
+                                                        setIsDetailOpen(true);
+                                                    }}
+                                                    className="h-7 w-7 p-0 rounded-none border border-slate-200 hover:bg-blue-50 hover:text-blue-700 text-slate-500"
+                                                    title="Lihat Rincian 14 Kolom"
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -6733,6 +7717,112 @@ export default function InspekturApproval({ isInspektur }: InspekturApprovalProp
                     </div>
                 )}
             </div>
+
+            {}
+            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+                <DialogContent className="max-w-2xl rounded-none p-0 overflow-hidden border-slate-300">
+                    <DialogHeader className="bg-slate-900 text-white p-4">
+                        <DialogTitle className="text-sm font-bold flex items-center gap-2">
+                            <Layers className="w-4 h-4 text-blue-400" />
+                            Rincian Standar 14 Kolom Agenda Pengawasan
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {selectedAgenda && (
+                        <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-xs text-slate-700 divide-y divide-slate-100">
+                            {}
+                            <div className="space-y-1 pb-3">
+                                <span className="text-[10px] font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 border border-blue-200">
+                                    {selectedAgenda.pelaksana || 'Irban 1'} • {selectedAgenda.jadwal || 'TW I'}
+                                </span>
+                                <h4 className="text-sm font-bold text-slate-900 mt-1.5">{selectedAgenda.areaPengawasan}</h4>
+                                <p className="text-slate-500 font-medium">Perangkat Daerah: <strong className="text-slate-800">{selectedAgenda.namaOpd}</strong></p>
+                            </div>
+
+                            {}
+                            <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jenis Pengawasan</p>
+                                    <p className="font-semibold text-slate-800 mt-0.5">{selectedAgenda.jenisPengawasan}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ruang Lingkup</p>
+                                    <p className="font-semibold text-slate-800 mt-0.5">{selectedAgenda.ruangLingkup || 'Semua Belanja Kegiatan'}</p>
+                                </div>
+                            </div>
+
+                            {}
+                            <div className="pt-3 space-y-1">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <FileText className="w-3.5 h-3.5 text-blue-600" />
+                                    Tujuan & Sasaran Pemeriksaan
+                                </p>
+                                <div className="bg-slate-50 p-3 border border-slate-200 font-sans text-slate-700 whitespace-pre-line leading-relaxed">
+                                    {selectedAgenda.tujuanSasaran || 'Pemeriksaan kepatuhan dan akuntabilitas pelaksanaan program kerja.'}
+                                </div>
+                            </div>
+
+                            {}
+                            <div className="pt-3 space-y-2">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                                    <Users className="w-3.5 h-3.5 text-indigo-600" />
+                                    Matriks Alokasi Hari Pemeriksaan (HP Tim)
+                                </p>
+                                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">PJ</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.pj || 1}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">WK PJ</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.wkpj || 1}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">Dalnis</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.dalnis || 10}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">Ketua Tim</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.kt || 15}</p>
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-2">
+                                        <p className="text-[10px] text-slate-400 font-bold">Anggota</p>
+                                        <p className="text-sm font-mono font-bold text-slate-800">{selectedAgenda.hariPemeriksaan?.at || 30}</p>
+                                    </div>
+                                    <div className="bg-blue-50 border border-blue-200 p-2">
+                                        <p className="text-[10px] text-blue-600 font-bold">Total HP</p>
+                                        <p className="text-sm font-mono font-bold text-blue-800">{selectedAgenda.hariPemeriksaan?.totalHp || 57}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {}
+                            <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Sarana dan Prasarana</p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {selectedAgenda.saranaPrasarana && selectedAgenda.saranaPrasarana.length > 0 ? (
+                                            selectedAgenda.saranaPrasarana.map((item, idx) => (
+                                                <span key={idx} className="inline-flex items-center gap-1 text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 border border-slate-200 font-medium">
+                                                    {getSaranaIcon(item)}
+                                                    {item}
+                                                </span>
+                                            ))
+                                        ) : (
+                                            <span className="text-slate-400 italic">Laptop, Printer, ATK</span>
+                                        )}
+                                    </div>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Jumlah Laporan (JUM LAP)</p>
+                                    <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedAgenda.jumlahLaporan || 1} Laporan Hasil Audit</p>
+                                    <p className="text-[10px] text-slate-400 mt-0.5">Tingkat Risiko: <strong className="text-slate-700">{selectedAgenda.prioritas}</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             {}
             <Dialog open={isRejectionModalOpen} onOpenChange={setIsRejectionModalOpen}>
@@ -6887,7 +7977,10 @@ export default function KnowledgeBaseDashboard() {
         if (type === 'REGULASI_INTERNAL') return 'SOP Audit';
         if (type === 'REGULASI_DAERAH') return 'Peraturan Daerah';
         if (type === 'TEMPLATES') return 'Standar Harga / Template';
-        return type.replace('_', ' ');
+        if (type === 'RENSTRA') return 'Renstra OPD';
+        if (type === 'DOKUMEN_PBJ') return 'Dokumen PBJ';
+        if (type === 'RKA_PERENCANAAN') return 'RKA / DPA';
+        return type.replace(/_/g, ' ');
     };
 
     return (
@@ -7113,7 +8206,7 @@ export default function KnowledgeBaseDashboard() {
                     <Button
                         variant="ghost"
                         size="sm"
-                        onClick={fetchDocuments}
+                        onClick={() => fetchDocuments()}
                         disabled={isLoadingDocs}
                         className="h-6 text-[10px] px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-none"
                     >
@@ -7207,21 +8300,47 @@ export default function KnowledgeBaseDashboard() {
 
 'use client';
 
-import { use } from 'react';
-import { ArrowLeft, MapPin, DollarSign, Calendar, Shield, AlertCircle, FileText, CheckCircle, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import {
+    ArrowLeft, MapPin, DollarSign, Calendar, Shield, AlertCircle, FileText,
+    CheckCircle, Clock, Upload, Brain, Trash2, FileSpreadsheet, Loader2, X
+} from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 import { useOpdStore } from '@/store/useOpdStore';
+import { useKnowledgeStore } from '@/store/useKnowledgeStore';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DocumentType, KnowledgeDoc } from '@/types/knowledge.type';
 
 interface OpdDetailProps {
     opdId: string;
 }
 
+const DOC_CATEGORIES: { label: string; type: DocumentType; description: string }[] = [
+    { label: 'Renstra', type: 'RENSTRA', description: 'Rencana Strategis OPD (5 Tahun)' },
+    { label: 'RKA / DPA', type: 'RKA_PERENCANAAN', description: 'Rencana Kerja Anggaran / Dokumen Pelaksanaan' },
+    { label: 'Dokumen PBJ', type: 'DOKUMEN_PBJ', description: 'Kontrak, Kuitansi, SPJ Pengadaan Barang/Jasa' },
+];
+
 export default function OpdDetail({ opdId }: OpdDetailProps) {
     const { getOpdById } = useOpdStore();
+    const { docList, isProcessing, currentDoc, isLoadingDocs, fetchDocuments, uploadDocument, deleteDocument } = useKnowledgeStore();
     const opd = getOpdById(opdId);
+
+    const [activeTab, setActiveTab] = useState<'profil' | 'dokumen' | 'riwayat'>('profil');
+    const [selectedDocType, setSelectedDocType] = useState<DocumentType>('RENSTRA');
+    const [dragOver, setDragOver] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (opd) {
+            fetchDocuments(opd.id);
+        }
+    }, [opd, fetchDocuments]);
+
+    const opdDocuments = docList.filter(doc => doc.opdId === opdId);
 
     if (!opd) {
         return (
@@ -7248,6 +8367,75 @@ export default function OpdDetail({ opdId }: OpdDetailProps) {
         }).format(num);
     };
 
+    const formatBytes = (bytes?: number) => {
+        if (!bytes) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    };
+
+    const getLabelForType = (type: DocumentType) => {
+        const cat = DOC_CATEGORIES.find(c => c.type === type);
+        return cat?.label || type.replace(/_/g, ' ');
+    };
+
+    const getStatusBadge = (doc: KnowledgeDoc) => {
+        const status = doc.status;
+        if (status === 'AKTIF' || status === 'Success') {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle className="w-3 h-3" /> Aktif (RAG Ready)
+                </span>
+            );
+        }
+        if (status === 'Uploading' || status === 'Parsing' || status === 'Vectorizing') {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200">
+                    <Loader2 className="w-3 h-3 animate-spin" /> {status}
+                </span>
+            );
+        }
+        if (status === 'Error') {
+            return (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-red-50 text-red-700 border border-red-200">
+                    <X className="w-3 h-3" /> Gagal
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 bg-slate-50 text-slate-600 border border-slate-200">
+                {status}
+            </span>
+        );
+    };
+
+    const handleFileUpload = async (file: File) => {
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'];
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (!ext || !allowedExtensions.includes(ext)) {
+            toast.error('Format Tidak Didukung', {
+                description: 'Harap unggah berkas PDF, Word, Excel, atau TXT.'
+            });
+            return;
+        }
+        await uploadDocument(file, selectedDocType, file.name, opdId);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setDragOver(false);
+        if (e.dataTransfer.files?.[0]) {
+            handleFileUpload(e.dataTransfer.files[0]);
+        }
+    };
+
+    const TABS = [
+        { key: 'profil' as const, label: 'Profil Instansi', icon: <MapPin className="w-3.5 h-3.5" /> },
+        { key: 'dokumen' as const, label: 'Dokumen OPD', icon: <FileText className="w-3.5 h-3.5" />, badge: opdDocuments.length },
+        { key: 'riwayat' as const, label: 'Riwayat Audit', icon: <Shield className="w-3.5 h-3.5" />, badge: opd.auditHistory?.length || 0 },
+    ];
+
     return (
         <div className="space-y-6">
             {}
@@ -7261,132 +8449,318 @@ export default function OpdDetail({ opdId }: OpdDetailProps) {
                             {opd.kode}
                         </span>
                         <h1 className="text-2xl font-bold text-slate-800 tracking-tight mt-2">{opd.namaOpd}</h1>
-                        <p className="text-slate-500 text-sm mt-1">Informasi lengkap profil instansi dan riwayat pengawasan internal.</p>
+                        <p className="text-slate-500 text-sm mt-1">Kelola profil, dokumen perencanaan, dan riwayat audit OPD.</p>
                     </div>
                 </div>
             </div>
 
             {}
-            <div className="border border-slate-200 bg-white rounded-none divide-y divide-slate-200">
-                {}
-                <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Nama Instansi</p>
-                        <p className="text-sm font-bold text-slate-800">{opd.namaOpd}</p>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Kode Instansi</p>
-                        <p className="text-sm font-mono font-bold text-slate-700">{opd.kode}</p>
-                    </div>
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pagu Anggaran Tahun Ini</p>
-                        <p className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                            <DollarSign className="w-4 h-4 text-emerald-600" />
-                            {formatRupiah(opd.paguAnggaran)}
-                        </p>
-                    </div>
-                </div>
+            <div className="flex gap-0 border-b border-slate-200">
+                {TABS.map(tab => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key)}
+                        className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition-all ${
+                            activeTab === tab.key
+                                ? 'border-blue-600 text-blue-700 bg-blue-50/50'
+                                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                        }`}
+                    >
+                        {tab.icon}
+                        {tab.label}
+                        {tab.badge !== undefined && tab.badge > 0 && (
+                            <span className="ml-1 text-[10px] font-mono bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-none">
+                                {tab.badge}
+                            </span>
+                        )}
+                    </button>
+                ))}
+            </div>
 
-                {}
-                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/30">
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Alamat Kantor</p>
-                        <p className="text-sm text-slate-700">{opd.alamat}</p>
+            {}
+            {activeTab === 'profil' && (
+                <div className="border border-slate-200 bg-white rounded-none divide-y divide-slate-200">
+                    {}
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Nama Instansi</p>
+                            <p className="text-sm font-bold text-slate-800">{opd.namaOpd}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Kode Instansi</p>
+                            <p className="text-sm font-mono font-bold text-slate-700">{opd.kode}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pagu Anggaran Tahun Ini</p>
+                            <p className="text-sm font-bold text-slate-800 flex items-center gap-1">
+                                <DollarSign className="w-4 h-4 text-emerald-600" />
+                                {formatRupiah(opd.paguAnggaran)}
+                            </p>
+                        </div>
                     </div>
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Koordinat Geografis (Anti-Fraud GPS)</p>
-                        <div className="flex items-center gap-2 text-xs font-mono text-slate-600 mt-1">
-                            <div className="flex items-center gap-1 bg-slate-100 px-2.5 py-1 border border-slate-200">
-                                <MapPin className="w-3.5 h-3.5 text-blue-500" />
-                                {opd.gpsKoordinat}
+
+                    {}
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50/30">
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Alamat Kantor</p>
+                            <p className="text-sm text-slate-700">{opd.alamat}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Koordinat Geografis (Anti-Fraud GPS)</p>
+                            <div className="flex items-center gap-2 text-xs font-mono text-slate-600 mt-1">
+                                <div className="flex items-center gap-1 bg-slate-100 px-2.5 py-1 border border-slate-200">
+                                    <MapPin className="w-3.5 h-3.5 text-blue-500" />
+                                    {opd.gpsKoordinat}
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                {}
-                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Dokumen RKA / Renstra</p>
-                        {opd.rkaFileName ? (
-                            <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-emerald-50/50 border border-emerald-200 px-3 py-2 w-fit mt-1">
-                                <FileText className="w-4 h-4 text-green-600" />
-                                {opd.rkaFileName}
+                    {}
+                    <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Dokumen Terdaftar di RAG</p>
+                            <p className="text-sm font-bold text-slate-800">{opdDocuments.length} dokumen</p>
+                        </div>
+                        <div className="space-y-1">
+                            <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tanggal Registrasi Sistem</p>
+                            <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-slate-400" />
+                                {new Date(opd.createdAt).toLocaleDateString('id-ID', {
+                                    weekday: 'long',
+                                    year: 'numeric',
+                                    month: 'long',
+                                    day: 'numeric',
+                                })}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'dokumen' && (
+                <div className="space-y-5">
+                    {}
+                    <div className="border border-slate-200 bg-white rounded-none p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Brain className="w-5 h-5 text-blue-600" />
+                                <div>
+                                    <h3 className="text-sm font-bold text-slate-800">Unggah Dokumen Perencanaan</h3>
+                                    <p className="text-[11px] text-slate-500">Dokumen yang diunggah akan otomatis diproses AI (chunking → embedding → RAG)</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {}
+                        <div className="flex gap-2 flex-wrap">
+                            {DOC_CATEGORIES.map(cat => (
+                                <button
+                                    key={cat.type}
+                                    onClick={() => setSelectedDocType(cat.type)}
+                                    className={`px-3 py-1.5 text-xs font-semibold border transition-all ${
+                                        selectedDocType === cat.type
+                                            ? 'bg-blue-600 text-white border-blue-600'
+                                            : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                    }`}
+                                >
+                                    {cat.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {}
+                        <div
+                            onClick={() => !isProcessing && fileInputRef.current?.click()}
+                            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                            onDragLeave={() => setDragOver(false)}
+                            onDrop={handleDrop}
+                            className={`border-2 border-dashed p-8 text-center cursor-pointer transition-all ${
+                                isProcessing
+                                    ? 'border-blue-300 bg-blue-50/30 cursor-wait'
+                                    : dragOver
+                                    ? 'border-blue-500 bg-blue-50'
+                                    : 'border-slate-300 hover:border-blue-400 hover:bg-slate-50'
+                            }`}
+                        >
+                            {isProcessing ? (
+                                <div className="space-y-2">
+                                    <Loader2 className="w-8 h-8 text-blue-500 mx-auto animate-spin" />
+                                    <p className="text-xs font-bold text-blue-700">
+                                        Memproses: {currentDoc?.title}
+                                    </p>
+                                    <p className="text-[11px] text-blue-500">
+                                        {currentDoc?.status} — {currentDoc?.progress || 0}%
+                                    </p>
+                                    <div className="w-64 mx-auto bg-slate-200 h-1.5">
+                                        <div
+                                            className="bg-blue-600 h-1.5 transition-all duration-500"
+                                            style={{ width: `${currentDoc?.progress || 0}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <Upload className="w-8 h-8 text-slate-400 mx-auto" />
+                                    <p className="text-xs font-bold text-slate-700">
+                                        Seret & Lepas berkas {getLabelForType(selectedDocType)} di sini
+                                    </p>
+                                    <p className="text-[11px] text-slate-400">
+                                        PDF, Word, Excel, atau TXT • Maks 50 MB
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+                            className="hidden"
+                            onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                        />
+                    </div>
+
+                    {}
+                    <div className="border border-slate-200 bg-white rounded-none">
+                        <div className="px-5 py-3 border-b border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                Dokumen Terdaftar — {opd.namaOpd}
+                            </h3>
+                            <span className="text-[10px] font-mono text-slate-400">
+                                {opdDocuments.length} berkas
+                            </span>
+                        </div>
+
+                        {isLoadingDocs ? (
+                            <div className="p-8 text-center">
+                                <Loader2 className="w-6 h-6 text-slate-400 mx-auto animate-spin" />
+                                <p className="text-xs text-slate-500 mt-2">Memuat daftar dokumen...</p>
+                            </div>
+                        ) : opdDocuments.length === 0 ? (
+                            <div className="p-8 text-center">
+                                <FileSpreadsheet className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                                <p className="text-xs font-bold text-slate-600">Belum Ada Dokumen</p>
+                                <p className="text-[11px] text-slate-400 mt-1">
+                                    Unggah dokumen Renstra, RKA, atau PBJ menggunakan area di atas.
+                                </p>
                             </div>
                         ) : (
-                            <p className="text-xs text-slate-400 italic mt-1">Belum ada dokumen perencanaan (RKA/Renstra) yang diunggah.</p>
+                            <Table className="border-collapse">
+                                <TableHeader className="bg-slate-50 border-b border-slate-200">
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="w-[40px] font-bold text-slate-700 text-xs">No</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Nama Berkas</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Kategori</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Ukuran</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Status AI</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Chunks</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs text-right w-[80px]">Aksi</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {opdDocuments.map((doc, idx) => (
+                                        <TableRow key={doc.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
+                                            <TableCell className="font-mono text-slate-400 text-xs">{idx + 1}</TableCell>
+                                            <TableCell>
+                                                <p className="text-xs font-semibold text-slate-800 truncate max-w-[200px]" title={doc.title}>
+                                                    {doc.title}
+                                                </p>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 border border-slate-200">
+                                                    {getLabelForType(doc.type)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-slate-600 font-mono">
+                                                {formatBytes(doc.metadata?.fileSize)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {getStatusBadge(doc)}
+                                            </TableCell>
+                                            <TableCell className="text-xs font-mono font-bold text-slate-700">
+                                                {doc.metadata?.totalChunks || '—'}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 rounded-none border border-slate-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 text-slate-500"
+                                                    onClick={() => {
+                                                        if (window.confirm(`Hapus dokumen "${doc.title}"? Vektor AI juga akan dihapus.`)) {
+                                                            deleteDocument(doc.id);
+                                                        }
+                                                    }}
+                                                    title="Hapus Dokumen"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         )}
                     </div>
-                    <div className="space-y-1">
-                        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tanggal Registrasi Sistem</p>
-                        <p className="text-xs text-slate-600 mt-1 flex items-center gap-1.5">
-                            <Calendar className="w-4 h-4 text-slate-400" />
-                            {new Date(opd.createdAt).toLocaleDateString('id-ID', {
-                                weekday: 'long',
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric',
-                            })}
-                        </p>
+                </div>
+            )}
+
+            {activeTab === 'riwayat' && (
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2 pb-2">
+                        <Shield className="w-4 h-4 text-slate-500" />
+                        <h2 className="text-base font-bold text-slate-800">Histori Pemeriksaan & Audit</h2>
+                    </div>
+
+                    <div className="border border-slate-200 bg-white rounded-none">
+                        {!opd.auditHistory || opd.auditHistory.length === 0 ? (
+                            <div className="p-8 text-center text-slate-500 text-xs italic">
+                                Belum ada riwayat audit yang tercatat untuk dinas ini.
+                            </div>
+                        ) : (
+                            <Table className="border-collapse">
+                                <TableHeader className="bg-slate-50 border-b border-slate-200">
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableHead className="w-[80px] font-bold text-slate-700 text-xs">Tahun</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Nomor Surat Tugas</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs">Tim Pemeriksa</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs text-center">Jumlah Temuan</TableHead>
+                                        <TableHead className="font-bold text-slate-700 text-xs w-[180px]">Status Audit</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {opd.auditHistory.map((audit) => (
+                                        <TableRow key={audit.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
+                                            <TableCell className="font-mono text-slate-700 text-xs font-semibold">{audit.tahun}</TableCell>
+                                            <TableCell className="font-mono text-slate-800 text-xs">{audit.nomorSuratTugas}</TableCell>
+                                            <TableCell className="text-xs text-slate-700 font-medium">{audit.timAudit}</TableCell>
+                                            <TableCell className="text-xs font-mono font-bold text-slate-800 text-center">
+                                                {audit.temuanCount} Temuan
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 border text-xs font-semibold rounded-none ${
+                                                    audit.status === 'Selesai'
+                                                        ? 'bg-green-50 text-green-700 border-green-200'
+                                                        : audit.status === 'Dalam Pengawasan'
+                                                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                                                }`}>
+                                                    {audit.status === 'Selesai' ? (
+                                                        <CheckCircle className="w-3 h-3 text-green-500" />
+                                                    ) : (
+                                                        <Clock className="w-3 h-3 text-amber-500" />
+                                                    )}
+                                                    {audit.status}
+                                                </span>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
                     </div>
                 </div>
-            </div>
-
-            {}
-            <div className="space-y-3">
-                <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
-                    <Shield className="w-4 h-4 text-slate-500" />
-                    <h2 className="text-base font-bold text-slate-800">Histori Pemeriksaan & Audit</h2>
-                </div>
-
-                <div className="border border-slate-200 bg-white rounded-none">
-                    {!opd.auditHistory || opd.auditHistory.length === 0 ? (
-                        <div className="p-8 text-center text-slate-500 text-xs italic">
-                            Belum ada riwayat audit yang tercatat untuk dinas ini.
-                        </div>
-                    ) : (
-                        <Table className="border-collapse">
-                            <TableHeader className="bg-slate-50 border-b border-slate-200">
-                                <TableRow className="hover:bg-transparent">
-                                    <TableHead className="w-[80px] font-bold text-slate-700 text-xs">Tahun</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs">Nomor Surat Tugas</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs">Tim Pemeriksa</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs text-center">Jumlah Temuan</TableHead>
-                                    <TableHead className="font-bold text-slate-700 text-xs w-[180px]">Status Audit</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {opd.auditHistory.map((audit) => (
-                                    <TableRow key={audit.id} className="hover:bg-slate-50/50 border-b border-slate-200 last:border-0">
-                                        <TableCell className="font-mono text-slate-700 text-xs font-semibold">{audit.tahun}</TableCell>
-                                        <TableCell className="font-mono text-slate-800 text-xs">{audit.nomorSuratTugas}</TableCell>
-                                        <TableCell className="text-xs text-slate-700 font-medium">{audit.timAudit}</TableCell>
-                                        <TableCell className="text-xs font-mono font-bold text-slate-800 text-center">
-                                            {audit.temuanCount} Temuan
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 border text-xs font-semibold rounded-none ${
-                                                audit.status === 'Selesai'
-                                                    ? 'bg-green-50 text-green-700 border-green-200'
-                                                    : audit.status === 'Dalam Pengawasan'
-                                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                                    : 'bg-slate-50 text-slate-700 border-slate-200'
-                                            }`}>
-                                                {audit.status === 'Selesai' ? (
-                                                    <CheckCircle className="w-3 h-3 text-green-500" />
-                                                ) : (
-                                                    <Clock className="w-3 h-3 text-amber-500" />
-                                                )}
-                                                {audit.status}
-                                            </span>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    )}
-                </div>
-            </div>
+            )}
         </div>
     );
 }
@@ -7812,6 +9186,42 @@ export default function RiskAssessment({ isKasubag }: RiskAssessmentProps) {
                     <p className="text-[10px] text-slate-400 mt-1 italic">
                         Kategori Prioritas: High Risk (NTR &ge; 7.5) | Medium Risk (5.5 &le; NTR &lt; 7.5) | Low Risk (NTR &lt; 5.5).
                     </p>
+                </div>
+            </div>
+
+            {}
+            <div className="border border-slate-200 bg-white p-5 rounded-none space-y-4 shadow-sm">
+                <div className="border-b border-slate-100 pb-2 flex items-center gap-2">
+                    <Info className="w-4 h-4 text-blue-600 shrink-0" />
+                    <div>
+                        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+                            Panduan Metodologi & Sumber Data Analisis Risiko
+                        </h4>
+                        <p className="text-slate-400 text-[10px] mt-0.5">Penjelasan lengkap mengenai variabel perhitungan, asal usul data, dan landasan regulasi BPKP.</p>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs leading-relaxed">
+                    <div className="space-y-2 border-r border-slate-100 pr-4 last:border-0 last:pr-0">
+                        <h5 className="font-bold text-slate-850">1. Apa yang Kita Analisis?</h5>
+                        <ul className="list-disc pl-4 space-y-1.5 text-slate-500 text-[11px]">
+                            <li><strong>Nilai Risiko Inheren (NRI):</strong> Mengukur kerentanan bawaan OPD. Terdiri atas besaran pagu anggaran belanja (semakin besar anggaran, semakin rawan salah urus) dan jarak logistik/geografis dinas dari kantor Inspektorat.</li>
+                            <li><strong>Nilai Faktor Risiko (NFR):</strong> Mengukur kelemahan sistem kontrol dinas. Terdiri atas riwayat jumlah temuan audit di LHP sebelumnya dan jumlah rekomendasi perbaikan Inspektorat yang belum mereka tindak lanjuti.</li>
+                        </ul>
+                    </div>
+                    <div className="space-y-2 border-r border-slate-100 pr-4 last:border-0 last:pr-0">
+                        <h5 className="font-bold text-slate-850">2. Dari Mana Sumber Datanya?</h5>
+                        <ul className="list-disc pl-4 space-y-1.5 text-slate-500 text-[11px]">
+                            <li><strong>Pagu & Koordinat (NRI):</strong> Diambil secara real-time dari profil dinas di database (yang disinkronkan langsung dengan data RKA di sistem SIPD dan data lokasi BKD Daerah).</li>
+                            <li><strong>Historis & Tunggakan (NFR):</strong> Dihitung otomatis dari rekam jejak digital Laporan Hasil Pemeriksaan (LHP) dan tabel pemantauan tindak lanjut (TLHP) internal yang tersimpan pada database aplikasi ini.</li>
+                        </ul>
+                    </div>
+                    <div className="space-y-2">
+                        <h5 className="font-bold text-slate-850">3. Mengapa Rumus & Bobot Ini Digunakan?</h5>
+                        <ul className="list-disc pl-4 space-y-1.5 text-slate-500 text-[11px]">
+                            <li><strong>Pembobotan (70% NRI + 30% NFR):</strong> Memberikan prioritas utama pada tingkat dampak kerugian negara (anggaran belanja), kemudian dikalikan dengan kepatuhan dinas (tunggakan temuan) agar penilaian berkeadilan.</li>
+                            <li><strong>Dasar Regulasi:</strong> Mengikuti aturan **Pedoman Perencanaan Pengawasan Berbasis Risiko BPKP** agar penugasan audit efektif menyasar OPD yang paling membutuhkan pengawasan.</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 
@@ -8843,9 +10253,6 @@ export default function TanggapanAnalyzer({ stId }: TanggapanAnalyzerProps) {
     );
 }
 
---- FILE: src\hooks\mutations\useCreateOpd.ts ---
-
-
 --- FILE: src\hooks\mutations\useOpdMutation.ts ---
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -8961,9 +10368,6 @@ export function useGeneratePkaMutation() {
         },
     });
 }
-
---- FILE: src\hooks\mutations\useSyncPegawai.ts ---
-
 
 --- FILE: src\hooks\queries\useGetOpd.ts ---
 
@@ -9102,7 +10506,7 @@ api.interceptors.request.use(
 
         const user = useAuthStore.getState().user;
         if (user) {
-            config.headers['x-mock-role'] = user.role;
+            config.headers['x-mock-role'] = user.role === 'AUDITOR' ? 'APIP_INTERNAL' : user.role;
             config.headers['x-mock-user-id'] = user.id;
             if (user.pegawaiId) {
                 config.headers['x-mock-pegawai-id'] = user.pegawaiId;
@@ -9299,20 +10703,33 @@ interface AuthState {
     logout: () => void;
 }
 
+const getStoredUser = (): User | null => {
+    const stored = Cookies.get('user');
+    if (!stored) return null;
+    try {
+        return JSON.parse(stored) as User;
+    } catch (e) {
+        console.error('Gagal mem-parsing data user dari cookies:', e);
+        return null;
+    }
+};
+
 export const useAuthStore = create<AuthState>((set) => ({
-    user: null,
+    user: getStoredUser(),
     token: Cookies.get('token') || null,
     isAuthenticated: !!Cookies.get('token'),
 
     setAuth: (user: User, token: string) => {
 
         Cookies.set('token', token, { expires: 1, secure: true, sameSite: 'strict' });
+        Cookies.set('user', JSON.stringify(user), { expires: 1, secure: true, sameSite: 'strict' });
         set({ user, token, isAuthenticated: true });
     },
 
     logout: () => {
 
         Cookies.remove('token');
+        Cookies.remove('user');
         set({ user: null, token: null, isAuthenticated: false });
 
         if (typeof window !== 'undefined') {
@@ -9492,8 +10909,8 @@ interface KnowledgeState {
     currentDoc: KnowledgeDoc | null;
     isLoadingDocs: boolean;
 
-    fetchDocuments: () => Promise<void>;
-    uploadDocument: (file: File, type: DocumentType, title: string) => Promise<void>;
+    fetchDocuments: (opdId?: string) => Promise<void>;
+    uploadDocument: (file: File, type: DocumentType, title: string, opdId?: string) => Promise<void>;
     deleteDocument: (id: string) => Promise<void>;
     clearCurrentDoc: () => void;
 }
@@ -9504,10 +10921,11 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     currentDoc: null,
     isLoadingDocs: false,
 
-    fetchDocuments: async () => {
+    fetchDocuments: async (opdId?: string) => {
         set({ isLoadingDocs: true });
         try {
-            const response = await api.get('/documents');
+            const params = opdId ? `?opdId=${opdId}` : '';
+            const response = await api.get(`/documents${params}`);
             set({ docList: response.data.data, isLoadingDocs: false });
         } catch (error: any) {
             toast.error('Gagal Memuat Data', {
@@ -9517,7 +10935,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
         }
     },
 
-    uploadDocument: async (file: File, type: DocumentType, title: string) => {
+    uploadDocument: async (file: File, type: DocumentType, title: string, opdId?: string) => {
         const tempId = `temp-${Date.now()}`;
         const tempDoc: KnowledgeDoc = {
             id: tempId,
@@ -9527,6 +10945,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             filePath: '',
             createdAt: new Date().toISOString(),
             progress: 0,
+            opdId: opdId || null,
             metadata: {
                 id: '',
                 fileSize: file.size,
@@ -9544,12 +10963,13 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             formData.append('file', file);
             formData.append('type', type);
             formData.append('title', title);
+            if (opdId) formData.append('opdId', opdId);
 
             const res = await api.post('/documents/ingest', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
 
-            const expectedHash = res.data.data?.hash;
+            const jobId = res.data.data?.jobId;
 
             let currentProgress = 0;
             const visualInterval = setInterval(() => {
@@ -9564,18 +10984,31 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
 
             const pollInterval = setInterval(async () => {
                 try {
-                    const listRes = await api.get('/documents');
-                    const docs = listRes.data.data;
+                    const statusRes = await api.get(`/documents/job/${jobId}`);
+                    const jobStatus = statusRes.data.data;
 
-                    const foundDoc = docs.find((d: any) => d.metadata?.hash === expectedHash);
-
-                    if (foundDoc && foundDoc.status === 'AKTIF') {
+                    if (jobStatus.state === 'failed') {
                         clearInterval(visualInterval);
                         clearInterval(pollInterval);
 
                         set({
                             isProcessing: false,
-                            docList: docs,
+                            currentDoc: { ...get().currentDoc!, progress: 0, status: 'Error' }
+                        });
+
+                        toast.error('Gagal Ingesti AI', {
+                            description: jobStatus.failedReason || 'Dokumen gagal diproses (non-OCR atau format tidak cocok).',
+                        });
+
+                        await get().fetchDocuments();
+                    } else if (jobStatus.state === 'completed') {
+                        clearInterval(visualInterval);
+                        clearInterval(pollInterval);
+
+                        await get().fetchDocuments();
+
+                        set({
+                            isProcessing: false,
                             currentDoc: { ...get().currentDoc!, progress: 100, status: 'Success' }
                         });
 
@@ -9586,7 +11019,7 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                 } catch (pollError) {
                     console.error('Terjadi gangguan saat memantau status RAG.', pollError);
                 }
-            }, 3000);
+            }, 2000);
 
             setTimeout(() => {
                 if (get().isProcessing) {
@@ -9797,14 +11230,34 @@ export interface OpdRisk {
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
 }
 
+export interface HariPemeriksaan {
+    pj?: number;
+    wkpj?: number;
+    dalnis?: number;
+    kt?: number;
+    at?: number;
+    totalHp?: number;
+}
+
 export interface AuditAgenda {
     id: string;
     namaAudit: string;
     opdId: string;
     namaOpd: string;
+    areaPengawasan: string;
+    jenisPengawasan: string;
+    tujuanSasaran: string;
+    ruangLingkup: string;
+    pelaksana: string;
+    jadwal: string;
+    perkiraanBulan: number;
     alokasiWaktu: string;
+    hariPemeriksaan: HariPemeriksaan;
     anggaran: number;
+    jumlahLaporan: number;
+    saranaPrasarana: string[];
     prioritas: 'Tinggi' | 'Sedang' | 'Rendah';
+    keterangan?: string;
 }
 
 export type PkptStatus = 'DRAF' | 'MENUNGGU_PERSETUJUAN' | 'DISETUJUI';
@@ -9906,22 +11359,45 @@ export const usePkptStore = create<PkptState>((set, get) => ({
 
             if (currentPkpt) {
                 const mappedAgendas = currentPkpt.agendaAudits.map((a: any) => {
-                    const hp = a.substansiDokumen?.hariPemeriksaan;
-                    const totalHp = hp ? (Number(hp.pj||0) + Number(hp.wkpj||0) + Number(hp.dalnis||0) + Number(hp.kt||0) + Number(hp.at||0)) : 0;
+                    const sub = a.substansiDokumen || {};
+                    const hp = sub.hariPemeriksaan || {};
+                    const totalHp = hp.totalHp || (Number(hp.pj||0) + Number(hp.wkpj||0) + Number(hp.dalnis||0) + Number(hp.kt||0) + Number(hp.at||0));
 
-                    let prioritas: 'Tinggi'|'Sedang'|'Rendah' = 'Sedang';
-                    const alasan = String(a.substansiDokumen?.alasanPrioritas || '').toLowerCase();
-                    if (alasan.includes('tinggi') || alasan.includes('high')) prioritas = 'Tinggi';
-                    else if (alasan.includes('rendah') || alasan.includes('low')) prioritas = 'Rendah';
+                    let prioritas: 'Tinggi'|'Sedang'|'Rendah' = 'Tinggi';
+                    if (sub.tingkatRisiko) {
+                        prioritas = sub.tingkatRisiko;
+                    } else {
+                        const alasan = String(sub.alasanPrioritas || '').toLowerCase();
+                        if (alasan.includes('sedang') || alasan.includes('medium')) prioritas = 'Sedang';
+                        else if (alasan.includes('rendah') || alasan.includes('low')) prioritas = 'Rendah';
+                    }
 
                     return {
                         id: a.id,
-                        namaAudit: a.substansiDokumen?.namaAudit || a.jenisPengawasan,
+                        namaAudit: sub.areaPengawasan || a.jenisPengawasan || 'Program Audit',
                         opdId: a.opdId,
                         namaOpd: a.opd?.namaOpd || 'Unknown',
-                        alokasiWaktu: a.substansiDokumen?.alokasiWaktu || (totalHp > 0 ? `${totalHp} Hari Pemeriksaan` : `Target Bulan ke-${a.perkiraanBulan}`),
-                        anggaran: Number(a.estimasiAnggaran),
-                        prioritas
+                        areaPengawasan: sub.areaPengawasan || sub.namaAudit || a.jenisPengawasan || 'Program Kerja OPD',
+                        jenisPengawasan: a.jenisPengawasan || sub.jenisPengawasan || 'Audit Tujuan Tertentu',
+                        tujuanSasaran: sub.tujuanSasaran || 'Pemeriksaan kepatuhan dan akuntabilitas pelaksanaan program.',
+                        ruangLingkup: sub.ruangLingkup || 'Belanja Barang/Jasa & Modal',
+                        pelaksana: sub.pelaksana || 'Irban 1',
+                        jadwal: sub.jadwal || (a.perkiraanBulan ? `TW ${Math.ceil(a.perkiraanBulan / 3)}` : 'TW I'),
+                        perkiraanBulan: a.perkiraanBulan || 2,
+                        alokasiWaktu: totalHp > 0 ? `${totalHp} HP (${sub.jadwal || `TW ${Math.ceil(a.perkiraanBulan / 3)}`})` : `Target Bulan ke-${a.perkiraanBulan}`,
+                        hariPemeriksaan: {
+                            pj: hp.pj || 1,
+                            wkpj: hp.wkpj || 1,
+                            dalnis: hp.dalnis || 10,
+                            kt: hp.kt || 15,
+                            at: hp.at || 30,
+                            totalHp: totalHp || 57,
+                        },
+                        anggaran: Number(a.estimasiAnggaran) || 0,
+                        jumlahLaporan: sub.jumlahLaporan || 1,
+                        saranaPrasarana: Array.isArray(sub.saranaPrasarana) ? sub.saranaPrasarana : ['Laptop', 'Printer', 'ATK'],
+                        prioritas,
+                        keterangan: sub.keterangan || sub.alasanPrioritas || '',
                     };
                 });
 
@@ -10624,7 +12100,9 @@ export type DocumentType =
     | 'TEMPLATES'
     | 'LAINNYA'
     | 'RKA_PERENCANAAN'
-    | 'ADENDUM_JUSTIFIKASI';
+    | 'ADENDUM_JUSTIFIKASI'
+    | 'RENSTRA'
+    | 'DOKUMEN_PBJ';
 
 export type DocumentStatus = 'DRAF' | 'AKTIF' | 'ARSIP';
 
@@ -10646,6 +12124,8 @@ export interface KnowledgeDoc {
     filePath: string;
     createdAt: string;
     metadata?: DocMetadata;
+    opdId?: string | null;
+    opd?: { id: string; namaOpd: string } | null;
 
     progress?: number;
 }

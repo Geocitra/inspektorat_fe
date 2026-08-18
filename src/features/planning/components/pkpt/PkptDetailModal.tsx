@@ -167,16 +167,16 @@ export const PkptDetailModal: React.FC<PkptDetailModalProps> = ({
                     </div>
                 </div>
 
-                {/* Footer Modal dengan Tombol Tutup */}
-                <DialogFooter className="p-3.5 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+                {/* Footer Modal Rapi & Menyatu */}
+                <div className="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-end shrink-0">
                     <Button
                         type="button"
                         onClick={() => onOpenChange(false)}
-                        className="bg-slate-800 hover:bg-slate-900 text-white rounded-none text-xs font-semibold px-5 h-8 shadow-none"
+                        className="bg-slate-800 hover:bg-slate-900 text-white rounded-none text-xs font-semibold px-6 h-9 shadow-xs"
                     >
                         Tutup Rincian
                     </Button>
-                </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

@@ -3,9 +3,9 @@
 
 import { use, useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/useAuthStore';
-import { useStStore } from '@/store/useStStore';
+import { useStDetailQuery, useStListQuery } from '@/hooks/queries/useSt';
 import { useAuditorStore } from '@/store/useAuditorStore';
-import { AlertCircle, FileText, UserCheck, ShieldAlert, Sparkles, LogIn } from 'lucide-react';
+import { AlertCircle, FileText, UserCheck, ShieldAlert, Sparkles, LogIn, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -23,14 +23,13 @@ export default function AuditExecutionLayout({
     const router = useRouter();
 
     const { user } = useAuthStore();
-    const { stList } = useStStore();
     const { auditorList } = useAuditorStore();
 
-    // 1. Validasi keberadaan Surat Tugas
-    const st = stList.find(s => s.id === stId);
+    // 1. Fetch data ST langsung dari backend via React Query
+    const { data: st, isLoading: isLoadingSt } = useStDetailQuery(stId);
 
-    // 2. Deteksi Peran Uji Coba Cepat (Ketua vs Anggota) via Query Parameter (?type=ketua)
-    const [activeAuditorId, setActiveAuditorId] = useState('auditor-2'); // Default Siti Rahma (Anggota)
+    // 2. Deteksi Peran Uji Coba Cepat (Ketua vs Anggota) via Query Parameter
+    const [activeAuditorId, setActiveAuditorId] = useState('');
     const [activeRole, setActiveRole] = useState<string>('');
 
     useEffect(() => {
@@ -39,39 +38,49 @@ export default function AuditExecutionLayout({
             const urlType = searchParams.get('type')?.toLowerCase();
             const urlRole = searchParams.get('role')?.toUpperCase();
 
-            // Set role
+            // Set role aktif
             if (urlRole) {
                 setActiveRole(urlRole);
             } else if (user?.role) {
                 setActiveRole(user.role);
             }
 
-            // Set pegawai ID based on type
-            if (urlType === 'ketua') {
-                setActiveAuditorId('auditor-1'); // Budi Santoso (Ketua)
-            } else if (urlType === 'anggota') {
-                setActiveAuditorId('auditor-2'); // Siti Rahma (Anggota)
-            } else {
-                // Sesuai user yang login
-                if (user?.role === 'AUDITOR') {
-                    // Default ke Budi jika dia adalah ketua di ST ini
-                    setActiveAuditorId(st?.ketuaTimId === 'auditor-1' ? 'auditor-1' : 'auditor-2');
-                }
+            // Set pegawai ID secara dinamis
+            if (urlType === 'ketua' && st?.ketuaTimId) {
+                setActiveAuditorId(st.ketuaTimId);
+            } else if (urlType === 'anggota' && st?.anggotaIds && st.anggotaIds.length > 0) {
+                setActiveAuditorId(st.anggotaIds[0]);
+            } else if (user?.pegawaiId) {
+                setActiveAuditorId(user.pegawaiId);
+            } else if (st?.ketuaTimId) {
+                setActiveAuditorId(st.ketuaTimId);
             }
         }
     }, [user, st]);
 
-    if (!st || st.status !== 'PUBLISHED') {
+    if (isLoadingSt) {
+        return (
+            <div className="max-w-md mx-auto my-20 text-center p-8 border border-slate-200 bg-white">
+                <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
+                <h3 className="text-sm font-bold text-slate-800">Memuat Workspace Audit...</h3>
+                <p className="text-xs text-slate-400 mt-1">Mengambil data penugasan Surat Tugas dari server.</p>
+            </div>
+        );
+    }
+
+    const isStValid = st && (st.status === 'PUBLISHED' || st.status === 'SELESAI' || !!st.tteHash);
+
+    if (!st || !isStValid) {
         return (
             <div className="max-w-md mx-auto my-12 text-center p-8 border border-slate-200 bg-white rounded-none">
                 <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <h2 className="text-lg font-bold text-slate-800 font-sans">Surat Tugas Tidak Valid</h2>
+                <h2 className="text-lg font-bold text-slate-800 font-sans">Surat Tugas Belum Disahkan</h2>
                 <p className="text-slate-500 text-xs mt-2 mb-6 leading-relaxed">
-                    Surat Tugas yang Anda cari tidak ditemukan atau belum disahkan oleh Inspektur Utama (Status masih DRAFT/PENDING).
+                    Surat Tugas ini belum disahkan secara elektronik (TTE) oleh Inspektur Utama. Silakan sahkan terlebih dahulu di menu Pengesahan ST.
                 </p>
-                <Link href="/">
-                    <Button className="rounded-none bg-slate-800 hover:bg-slate-900 text-xs w-full shadow-none">
-                        Kembali ke Beranda
+                <Link href="/penugasan/draf-st">
+                    <Button className="rounded-none bg-blue-600 hover:bg-blue-700 text-white text-xs w-full shadow-none font-bold">
+                        Buka Menu Pengesahan ST
                     </Button>
                 </Link>
             </div>
@@ -80,141 +89,115 @@ export default function AuditExecutionLayout({
 
     // 3. CONTEXTUAL ACCESS GUARD: Cek apakah user adalah Tim Audit yang terdaftar
     const isKetua = st.ketuaTimId === activeAuditorId;
-    const isAnggota = st.anggotaIds.includes(activeAuditorId);
-    const isAssigned = isKetua || isAnggota;
-
-    // Redirect Ketua Tim away from /upload page
-    useEffect(() => {
-        if (isAssigned && isKetua && pathname.endsWith('/upload')) {
-            router.replace(`/audit-execution/${stId}/review?role=auditor&type=ketua`);
-        }
-    }, [isAssigned, isKetua, pathname, stId, router]);
-
-    const isSystemAuditor = activeRole === 'AUDITOR';
-
-    // Jika yang login bukan AUDITOR (atau override role), block akses!
-    if (!isSystemAuditor) {
-        return (
-            <div className="max-w-md mx-auto my-12 text-center p-8 border border-slate-200 bg-white rounded-none">
-                <ShieldAlert className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-                <h2 className="text-lg font-bold text-slate-800 font-sans">Layar Terkunci</h2>
-                <p className="text-slate-500 text-xs mt-2 mb-6 leading-relaxed">
-                    Modul Eksekusi KKA & Deteksi Anomali hanya dapat diakses oleh akun dengan peran **Tim Audit (Auditor)**. Anda masuk sebagai {activeRole}.
-                </p>
-                <Link href="/login">
-                    <Button className="rounded-none bg-slate-800 hover:bg-slate-900 text-xs w-full shadow-none">
-                        Login sebagai Auditor
-                    </Button>
-                </Link>
-            </div>
-        );
-    }
-
-    // Jika auditor tidak terdaftar dalam tim ST tersebut, block akses! (Contextual Access)
-    if (!isAssigned) {
-        return (
-            <div className="max-w-md mx-auto my-12 text-center p-8 border border-slate-200 bg-white rounded-none">
-                <ShieldAlert className="w-12 h-12 text-red-500 mx-auto mb-4" />
-                <h2 className="text-lg font-bold text-slate-800 font-sans">Akses Ditolak (Bukan Tim ST)</h2>
-                <p className="text-slate-500 text-xs mt-2 mb-6 leading-relaxed">
-                    Sesuai dengan Aturan Keamanan Kontekstual, Anda tidak diperkenankan mengakses KKA Surat Tugas ini karena nama Anda tidak terdaftar di dalam tim pemeriksa ST {st.noSt}.
-                </p>
-                <Link href="/">
-                    <Button className="rounded-none bg-slate-800 hover:bg-slate-900 text-xs w-full shadow-none">
-                        Kembali ke Dashboard Utama
-                    </Button>
-                </Link>
-            </div>
-        );
-    }
-
-    const currentAuditorName = auditorList.find(a => a.id === activeAuditorId)?.nama || 'Unknown';
+    const isAnggota = Array.isArray(st.anggotaIds) && st.anggotaIds.includes(activeAuditorId);
+    // Beri kelonggaran akses jika role adalah AUDITOR, PIMPINAN, atau KASUBAG
+    const isAssigned = isKetua || isAnggota || activeRole === 'APIP_PIMPINAN' || activeRole === 'APIP_INTERNAL' || activeRole === 'AUDITOR';
 
     // Rute sub-menu
     const uploadHref = `/audit-execution/${stId}/upload?role=auditor&type=${isKetua ? 'ketua' : 'anggota'}`;
     const analysisHref = `/audit-execution/${stId}/analysis?role=auditor&type=${isKetua ? 'ketua' : 'anggota'}`;
     const reviewHref = `/audit-execution/${stId}/review?role=auditor&type=${isKetua ? 'ketua' : 'anggota'}`;
 
+    const currentAuditorName = auditorList.find(a => a.id === activeAuditorId)?.nama || (isKetua ? 'Ketua Tim Pemeriksa' : 'Anggota Tim Pemeriksa');
+
     return (
         <div className="space-y-6 max-w-6xl mx-auto">
             {/* AUDIT TIM HEADER BAR */}
-            <div className="border border-slate-200 bg-white p-4 rounded-none flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="bg-slate-900 text-white p-5 border-b border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="space-y-1">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                        <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                        Tim Audit Aktif &bull; {st.noSt}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-600/30 text-blue-400 px-2 py-0.5 border border-blue-500/30 font-mono">
+                            ST ACTIVE &bull; {st.noSt}
+                        </span>
+                        <span className="text-xs text-slate-400 font-mono">
+                            {st.tglMulai} s.d. {st.tglSelesai}
+                        </span>
+                    </div>
+                    <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-blue-400" />
+                        {st.namaAudit}
+                    </h1>
+                    <p className="text-xs text-slate-400">
+                        Sasaran Objek Audit: <strong className="text-slate-200">{st.namaOpd}</strong> &bull; Lokasi: {st.lokasi}
                     </p>
-                    <h2 className="text-sm font-bold text-slate-800 leading-normal">
-                        Auditor: <strong className="text-blue-600">{currentAuditorName}</strong> ({isKetua ? 'Ketua Tim' : 'Anggota Tim'})
-                    </h2>
                 </div>
 
-                {/* QUICK SWITCHER PRESETS FOR TESTING */}
-                <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-slate-400 font-bold uppercase">Simulasi Peran Tim:</span>
-                    <Link href={`/audit-execution/${stId}/upload?role=auditor&type=anggota`}>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className={`rounded-none text-[9px] h-6 px-2 shadow-none border-slate-200 ${!isKetua ? 'bg-slate-800 text-white hover:bg-slate-800' : 'text-slate-650 hover:bg-slate-50'}`}
+                {/* ROLE SWITCHER TOGGLE (KETUA VS ANGGOTA) */}
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1">
+                        <UserCheck className="w-3.5 h-3.5 text-blue-400" />
+                        Mode Auditor Aktif:
+                    </span>
+                    <div className="flex items-center border border-slate-700 bg-slate-800 p-0.5">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setActiveAuditorId(st.ketuaTimId);
+                                router.push(`/audit-execution/${stId}/review?role=auditor&type=ketua`);
+                            }}
+                            className={`px-3 py-1 text-xs font-semibold transition-colors ${
+                                isKetua 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
                         >
-                            Sebagai Anggota
-                        </Button>
-                    </Link>
-                    <Link href={`/audit-execution/${stId}/review?role=auditor&type=ketua`}>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className={`rounded-none text-[9px] h-6 px-2 shadow-none border-slate-200 ${isKetua ? 'bg-slate-800 text-white hover:bg-slate-800' : 'text-slate-650 hover:bg-slate-50'}`}
+                            Ketua Tim (Review &amp; NHP)
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const firstAnggota = st.anggotaIds?.[0] || 'auditor-2';
+                                setActiveAuditorId(firstAnggota);
+                                router.push(`/audit-execution/${stId}/upload?role=auditor&type=anggota`);
+                            }}
+                            className={`px-3 py-1 text-xs font-semibold transition-colors ${
+                                !isKetua 
+                                    ? 'bg-blue-600 text-white' 
+                                    : 'text-slate-400 hover:text-white'
+                            }`}
                         >
-                            Sebagai Ketua Tim
-                        </Button>
-                    </Link>
+                            Anggota (Unggah KKA)
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* TAB MENU WORKSPACE */}
-            <div className="flex border-b border-slate-200 bg-slate-50">
-                {!isKetua && (
-                    <Link
-                        href={uploadHref}
-                        className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
-                            pathname.endsWith('/upload')
-                                ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
-                                : 'text-slate-650 hover:bg-slate-100'
-                        }`}
-                    >
-                        1. Upload SPJ
-                    </Link>
-                )}
+            {/* SUB-NAVIGASI TABS WORKSPACE KKA */}
+            <div className="flex border-b border-slate-200 bg-white px-2">
                 <Link
-                    href={analysisHref}
-                    className={`px-4 py-3 text-xs font-bold border-r border-slate-200 flex items-center gap-1.5 transition-all ${
-                        pathname.endsWith('/analysis')
-                            ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
-                            : 'text-slate-600 hover:bg-slate-100'
+                    href={uploadHref}
+                    className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                        pathname.endsWith('/upload')
+                            ? 'border-blue-600 text-blue-600 bg-blue-50/40'
+                            : 'border-transparent text-slate-600 hover:text-slate-900'
                     }`}
                 >
-                    2. AI Anomaly Dashboard
+                    1. Unggah KKA &amp; Bukti Sampling
                 </Link>
-                
-                {/* Hanya Ketua Tim yang memiliki tombol review */}
-                {isKetua && (
-                    <Link
-                        href={reviewHref}
-                        className={`px-4 py-3 text-xs font-bold flex items-center gap-1.5 transition-all ${
-                            pathname.endsWith('/review')
-                                ? 'bg-white border-t-2 border-t-blue-600 text-blue-600'
-                                : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                    >
-                        3. Review Ketua Tim
-                    </Link>
-                )}
+                <Link
+                    href={analysisHref}
+                    className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                        pathname.endsWith('/analysis')
+                            ? 'border-blue-600 text-blue-600 bg-blue-50/40'
+                            : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                    2. Analisis AI &amp; Deteksi Anomali
+                </Link>
+                <Link
+                    href={reviewHref}
+                    className={`px-4 py-2.5 text-xs font-bold border-b-2 transition-colors flex items-center gap-1.5 ${
+                        pathname.endsWith('/review')
+                            ? 'border-blue-600 text-blue-600 bg-blue-50/40'
+                            : 'border-transparent text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                    3. Reviu KKA &amp; Penerbitan NHP
+                </Link>
             </div>
 
-            {/* CHILD CONTENTS */}
-            <div>{children}</div>
+            {/* CONTENT WORKSPACE */}
+            {children}
         </div>
     );
 }

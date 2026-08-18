@@ -333,27 +333,27 @@ export const PkptEditRowModal: React.FC<PkptEditRowModalProps> = ({
                     </div>
                 </div>
 
-                {/* Footer Modal */}
-                <DialogFooter className="p-3.5 border-t border-slate-100 bg-slate-50 flex justify-end gap-2 shrink-0">
+                {/* Footer Modal Rapi & Menyatu */}
+                <div className="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
                     <Button
                         type="button"
                         variant="outline"
                         onClick={() => onOpenChange(false)}
-                        className="rounded-none border-slate-300 text-xs shadow-none px-4 h-8"
+                        className="rounded-none border-slate-300 text-slate-700 bg-white hover:bg-slate-50 text-xs px-5 h-9 font-semibold shadow-xs flex items-center gap-1.5"
                     >
-                        <X className="w-3.5 h-3.5 mr-1" />
+                        <X className="w-3.5 h-3.5" />
                         Batal
                     </Button>
                     <Button
                         type="button"
                         onClick={handleSave}
                         disabled={isSaving}
-                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-none text-xs font-bold px-5 h-8 shadow-none"
+                        className="bg-blue-600 hover:bg-blue-700 text-white rounded-none text-xs font-bold px-6 h-9 shadow-md flex items-center gap-1.5"
                     >
-                        <Save className={`w-3.5 h-3.5 mr-1.5 ${isSaving ? 'animate-spin' : ''}`} />
+                        <Save className={`w-3.5 h-3.5 ${isSaving ? 'animate-spin' : ''}`} />
                         {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
                     </Button>
-                </DialogFooter>
+                </div>
             </DialogContent>
         </Dialog>
     );

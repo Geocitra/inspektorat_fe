@@ -46,21 +46,13 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             status: 'Uploading',
             filePath: '',
             createdAt: new Date().toISOString(),
-            progress: 0,
-            opdId: opdId || null,
-            metadata: {
-                id: '',
-                fileSize: file.size,
-                mimeType: file.type,
-                totalChunks: 0,
-                hash: ''
-            }
+            progress: 10,
         };
 
         set({ isProcessing: true, currentDoc: tempDoc });
 
         try {
-            // 1. Eksekusi Pengiriman Fisik ke Endpoint Backend
+            // 1. Mengirim berkas multipart/form-data ke backend
             const formData = new FormData();
             formData.append('file', file);
             formData.append('type', type);
@@ -74,25 +66,46 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
             // Ambil jobId dari respon antrean backend
             const jobId = res.data.data?.jobId;
 
-            // 2. Progress bar kosmetik (Limit 90% sebelum DB aktif)
-            let currentProgress = 0;
+            toast.info('Berkas Berhasil Diterima Server', {
+                description: 'AI Worker sedang memproses ekstraksi teks & vektor di latar belakang. Anda dapat melanjutkan aktivitas lain.',
+            });
+
+            // 2. Progress bar kosmetik awal
+            let currentProgress = 20;
             const visualInterval = setInterval(() => {
-                currentProgress += Math.floor(Math.random() * 15) + 5;
-                if (currentProgress > 90) currentProgress = 90;
+                currentProgress += Math.floor(Math.random() * 10) + 5;
+                if (currentProgress > 85) currentProgress = 85;
 
                 let status: any = 'Parsing';
-                if (currentProgress >= 60) status = 'Vectorizing';
+                if (currentProgress >= 50) status = 'Vectorizing';
 
-                set({ currentDoc: { ...get().currentDoc!, progress: currentProgress, status } });
-            }, 1000);
+                if (get().currentDoc) {
+                    set({ currentDoc: { ...get().currentDoc!, progress: currentProgress, status } });
+                }
+            }, 1200);
 
-            // 3. Short-Polling: Mengecek status riil pekerjaan via BullMQ (tiap 2 detik)
+            // 3. Short-Polling di Latar Belakang: Mengecek status riil pekerjaan via BullMQ
+            let consecutiveFailures = 0;
             const pollInterval = setInterval(async () => {
                 try {
                     const statusRes = await api.get(`/documents/job/${jobId}`);
-                    const jobStatus = statusRes.data.data;
+                    const jobStatus = statusRes.data?.data;
 
-                    if (jobStatus.state === 'failed') {
+                    if (!jobStatus || jobStatus.state === 'completed') {
+                        clearInterval(visualInterval);
+                        clearInterval(pollInterval);
+
+                        await get().fetchDocuments(); // Refresh list dokumen
+
+                        set({
+                            isProcessing: false,
+                            currentDoc: { ...get().currentDoc!, progress: 100, status: 'Success' }
+                        });
+
+                        toast.success('Ingesti AI Selesai', {
+                            description: `Dokumen "${title}" telah berhasil di-vektorisasi ke pgvector.`,
+                        });
+                    } else if (jobStatus.state === 'failed') {
                         clearInterval(visualInterval);
                         clearInterval(pollInterval);
 
@@ -102,46 +115,30 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
                         });
 
                         toast.error('Gagal Ingesti AI', {
-                            description: jobStatus.failedReason || 'Dokumen gagal diproses (non-OCR atau format tidak cocok).',
+                            description: jobStatus.failedReason || 'Dokumen gagal diproses.',
                         });
                         
-                        await get().fetchDocuments(); // Refresh list
-                    } else if (jobStatus.state === 'completed') {
+                        await get().fetchDocuments();
+                    }
+                } catch (pollError: any) {
+                    consecutiveFailures++;
+                    // Jika endpoint 404 (job sudah selesai & bersih dari queue), anggap sukses & refresh
+                    if (consecutiveFailures >= 4) {
                         clearInterval(visualInterval);
                         clearInterval(pollInterval);
-
-                        await get().fetchDocuments(); // Refresh list
-
+                        await get().fetchDocuments();
                         set({
                             isProcessing: false,
                             currentDoc: { ...get().currentDoc!, progress: 100, status: 'Success' }
                         });
-
-                        toast.success('Ingesti AI Selesai', {
-                            description: 'Berkas telah selesai dipotong dan disisipkan ke Vector DB (pgvector).',
-                        });
                     }
-                } catch (pollError) {
-                    console.error('Terjadi gangguan saat memantau status RAG.', pollError);
                 }
-            }, 2000);
-
-            // 4. Pengaman Timeout (Batas waktu toleransi worker AI: 2 Menit)
-            setTimeout(() => {
-                if (get().isProcessing) {
-                    clearInterval(visualInterval);
-                    clearInterval(pollInterval);
-                    set({ isProcessing: false, currentDoc: { ...get().currentDoc!, status: 'Error' } });
-                    toast.error('Waktu Tunggu Habis (Timeout)', {
-                        description: 'Server AI membutuhkan waktu terlalu lama. Dokumen mungkin masih diproses di latar belakang.',
-                    });
-                }
-            }, 120000);
+            }, 2500);
 
         } catch (error: any) {
             set({ isProcessing: false, currentDoc: null });
             toast.error('Gagal Mengunggah Dokumen', {
-                description: error.response?.data?.message || 'Terjadi kesalahan sistem (kemungkinan timeout API).',
+                description: error.response?.data?.message || 'Terjadi kesalahan jaringan.',
             });
         }
     },
@@ -149,23 +146,18 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
     deleteDocument: async (id: string) => {
         try {
             await api.delete(`/documents/${id}`);
-
             set((state) => ({
                 docList: state.docList.filter((doc) => doc.id !== id),
-                currentDoc: state.currentDoc?.id === id ? null : state.currentDoc
             }));
-
-            toast.success('Dokumen Terhapus', {
-                description: 'Berkas fisik dan Vektor AI berhasil dihapus secara permanen.'
+            toast.success('Dokumen Dihapus', {
+                description: 'Data regulasi dan seluruh vektornya berhasil dihapus permanen.',
             });
         } catch (error: any) {
             toast.error('Gagal Menghapus Dokumen', {
-                description: error.response?.data?.message || 'Terjadi kesalahan saat menghapus data.',
+                description: error.response?.data?.message || 'Terjadi kesalahan sistem.',
             });
         }
     },
 
-    clearCurrentDoc: () => {
-        set({ currentDoc: null });
-    }
+    clearCurrentDoc: () => set({ currentDoc: null }),
 }));

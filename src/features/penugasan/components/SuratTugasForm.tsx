@@ -10,7 +10,8 @@ import { useCreateStMutation, useRecommendTeamMutation } from '@/hooks/mutations
 import { toast } from 'sonner';
 import { 
     Sparkles, Calendar, MapPin, FileText, 
-    User, Users, Info, Building2, Layers, Check, ChevronDown
+    User, Users, Info, Building2, Layers, Check, ChevronDown, 
+    Star, X, Search
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatUnitKerja } from '@/lib/formatters';
@@ -22,7 +23,6 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AuditDateRangeModal from './AuditDateRangeModal';
 
-// Zod Schema Fleksibel
 const stFormSchema = z.object({
     pkptAgendaId: z.string().min(1, 'Harap pilih objek audit PKPT'),
     noSt: z.string().min(3, 'Nomor Surat Tugas minimal 3 karakter'),
@@ -49,8 +49,16 @@ interface AuditorWorkload {
     unitKerja?: string;
     activeStCount: number;
     workloadLevel: 'LONGGAR' | 'SEDANG' | 'PENUH';
-    activeStDetails?: Array<{ nomorSt: string; peran: string; namaOpd: string }>;
 }
+
+const TAB_FILTERS = [
+    { key: 'ALL', label: 'Semua Personil' },
+    { key: 'SELECTED', label: 'Tim Terpilih' },
+    { key: 'IRBAN_1', label: 'Irban 1' },
+    { key: 'IRBAN_2', label: 'Irban 2' },
+    { key: 'IRBAN_3', label: 'Irban 3' },
+    { key: 'IRBAN_INVESTIGASI', label: 'Investigasi' },
+];
 
 export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
     const { data: agendas = [] } = useAgendaQuery();
@@ -60,10 +68,12 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
     const [auditorList, setAuditorList] = useState<AuditorWorkload[]>([]);
     const [isLoadingAuditors, setIsLoadingAuditors] = useState(false);
     const [isRecruiting, setIsRecruiting] = useState(false);
-    const [isAutoGeneratingMeta, setIsAutoGeneratingMeta] = useState(false);
     const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
 
-    // Filter agenda yang belum memiliki Surat Tugas
+    // Tab filter & Search untuk memilih auditor
+    const [auditorTab, setAuditorTab] = useState<string>('ALL');
+    const [auditorSearch, setAuditorSearch] = useState('');
+
     const activeAgendas = agendas.filter(agenda => !agenda.suratTugas);
 
     const form = useForm<StFormValues>({
@@ -89,7 +99,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
 
     const selectedAgenda = activeAgendas.find(a => a.id === selectedPkptId);
 
-    // 1. Fetch Personil Lapangan dengan Workload Profile
+    // Fetch Personil Lapangan dengan Workload Profile
     const fetchAuditorWorkloads = async () => {
         setIsLoadingAuditors(true);
         try {
@@ -106,7 +116,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         fetchAuditorWorkloads();
     }, []);
 
-    // 2. Auto-Populate Nomor ST, Tanggal, & Lokasi saat Agenda PKPT dipilih
+    // Auto-Populate Nomor ST & Lokasi
     useEffect(() => {
         if (!selectedPkptId) return;
 
@@ -116,9 +126,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         const opdName = agenda.opd?.namaOpd || 'OPD Target';
         form.setValue('lokasi', `Kantor ${opdName} & Objek Terkait`);
 
-        // Generate meta otomatis dari backend
         const autoGenerateMeta = async () => {
-            setIsAutoGeneratingMeta(true);
             try {
                 const res = await api.get('/surat-tugas/meta/generate', {
                     params: { agendaId: selectedPkptId }
@@ -131,20 +139,16 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
             } catch (err) {
                 const currentYear = new Date().getFullYear();
                 form.setValue('noSt', `ST.700.1.2/001/ITDA-IRB.I/${currentYear}`);
-            } finally {
-                setIsAutoGeneratingMeta(false);
             }
         };
 
         autoGenerateMeta();
     }, [selectedPkptId]);
 
-    // 3. AI Smart Load-Balancing Team Recommendation
+    // AI Smart Team Recommendation
     const handleAiRecommendation = async () => {
         if (!selectedPkptId) {
-            toast.error('Pilih Agenda PKPT Dahulu', { 
-                description: 'Pilih objek audit PKPT agar AI memahami fokus program dan unit Irban terkait.' 
-            });
+            toast.error('Pilih Agenda PKPT Dahulu');
             return;
         }
 
@@ -156,9 +160,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
         const pelaksana = sub.pelaksana || 'Irban 1';
 
         setIsRecruiting(true);
-        toast.info('AI Smart Load-Balancing Aktif', { 
-            description: 'Menganalisis kompetensi & memprioritaskan personil dengan beban kerja terendah...' 
-        });
+        toast.info('AI Smart Load-Balancing Aktif...');
 
         try {
             const res = await recommendTeamMutation.mutateAsync({
@@ -170,51 +172,33 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
             } as any);
 
             const result = res as any;
-
-            if (result.pengawasTeknis) {
-                form.setValue('pengawasTeknisId', result.pengawasTeknis.id);
-            }
-            if (result.ketuaTim) {
-                form.setValue('ketuaTimId', result.ketuaTim.id);
-            }
+            if (result.pengawasTeknis) form.setValue('pengawasTeknisId', result.pengawasTeknis.id);
+            if (result.ketuaTim) form.setValue('ketuaTimId', result.ketuaTim.id);
             if (result.anggotaTim && result.anggotaTim.length > 0) {
                 form.setValue('anggotaIds', result.anggotaTim.map((a: any) => a.id));
             }
 
-            toast.success('Rekomendasi Tim Diterapkan', {
-                description: `Pengawas: ${result.pengawasTeknis?.nama || '-'}. Ketua: ${result.ketuaTim?.nama || '-'}.`
-            });
+            toast.success('Rekomendasi Tim Diterapkan');
+            setAuditorTab('SELECTED');
         } catch (err: any) {
-            toast.error('Gagal Merekomendasikan Tim', { 
-                description: err.response?.data?.message || 'Terjadi kesalahan sistem.' 
-            });
+            toast.error('Gagal Merekomendasikan Tim');
         } finally {
             setIsRecruiting(false);
         }
     };
 
-    // 4. Submit Form Surat Tugas
+    // Submit ST
     const onSubmit = async (values: StFormValues) => {
-        const agenda = activeAgendas.find(a => a.id === values.pkptAgendaId);
-        if (!agenda) return;
-
         const totalStaff = (values.pengawasTeknisId ? 1 : 0) + (values.ketuaTimId ? 1 : 0) + values.anggotaIds.length;
         if (totalStaff === 0) {
-            toast.error('Pilih Minimal 1 Personil', { description: 'Surat Tugas harus menugaskan minimal 1 auditor/pengawas.' });
+            toast.error('Pilih Minimal 1 Personil');
             return;
         }
 
         const auditorsPayload: Array<{ auditorId: string; peranDalamTim: 'Pengawas_Teknis' | 'Ketua_Tim' | 'Anggota_Tim' }> = [];
-        
-        if (values.pengawasTeknisId) {
-            auditorsPayload.push({ auditorId: values.pengawasTeknisId, peranDalamTim: 'Pengawas_Teknis' });
-        }
-        if (values.ketuaTimId) {
-            auditorsPayload.push({ auditorId: values.ketuaTimId, peranDalamTim: 'Ketua_Tim' });
-        }
-        values.anggotaIds.forEach(id => {
-            auditorsPayload.push({ auditorId: id, peranDalamTim: 'Anggota_Tim' });
-        });
+        if (values.pengawasTeknisId) auditorsPayload.push({ auditorId: values.pengawasTeknisId, peranDalamTim: 'Pengawas_Teknis' });
+        if (values.ketuaTimId) auditorsPayload.push({ auditorId: values.ketuaTimId, peranDalamTim: 'Ketua_Tim' });
+        values.anggotaIds.forEach(id => auditorsPayload.push({ auditorId: id, peranDalamTim: 'Anggota_Tim' }));
 
         try {
             await createStMutation.mutateAsync({
@@ -225,20 +209,66 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                 auditors: auditorsPayload,
             });
 
-            toast.success('Draf ST Berhasil Diterbitkan', { 
-                description: 'Surat Tugas berstatus DRAF dan siap diajukan ke Inspektur untuk TTE.' 
-            });
+            toast.success('Draf ST Berhasil Diterbitkan');
             form.reset();
             onSuccess();
         } catch (err: any) {
-            toast.error('Gagal Membuat Surat Tugas', { 
-                description: err.response?.data?.message || 'Terjadi kesalahan sistem.' 
-            });
+            toast.error('Gagal Membuat Surat Tugas', { description: err.response?.data?.message });
+        }
+    };
+
+    // Helper Filter Personil
+    const isSelectedAuditor = (id: string) => 
+        pengawasTeknisId === id || ketuaTimId === id || anggotaIds.includes(id);
+
+    const totalSelectedCount = (pengawasTeknisId ? 1 : 0) + (ketuaTimId ? 1 : 0) + anggotaIds.length;
+
+    const filteredAuditors = auditorList.filter(aud => {
+        const matchesSearch = aud.nama.toLowerCase().includes(auditorSearch.toLowerCase()) || aud.nip.includes(auditorSearch);
+        if (!matchesSearch) return false;
+
+        if (auditorTab === 'SELECTED') return isSelectedAuditor(aud.id);
+        if (auditorTab === 'ALL') return true;
+        return aud.unitKerja === auditorTab;
+    });
+
+    const ptObj = auditorList.find(a => a.id === pengawasTeknisId);
+    const ktObj = auditorList.find(a => a.id === ketuaTimId);
+    const atObjs = auditorList.filter(a => anggotaIds.includes(a.id));
+
+    // Handle Toggle Peran
+    const handleTogglePT = (audId: string) => {
+        if (pengawasTeknisId === audId) {
+            form.setValue('pengawasTeknisId', '');
+        } else {
+            form.setValue('pengawasTeknisId', audId);
+            if (ketuaTimId === audId) form.setValue('ketuaTimId', '');
+            if (anggotaIds.includes(audId)) form.setValue('anggotaIds', anggotaIds.filter(id => id !== audId));
+        }
+    };
+
+    const handleToggleKT = (audId: string) => {
+        if (ketuaTimId === audId) {
+            form.setValue('ketuaTimId', '');
+        } else {
+            form.setValue('ketuaTimId', audId);
+            if (pengawasTeknisId === audId) form.setValue('pengawasTeknisId', '');
+            if (anggotaIds.includes(audId)) form.setValue('anggotaIds', anggotaIds.filter(id => id !== audId));
+        }
+    };
+
+    const handleToggleAT = (audId: string) => {
+        if (anggotaIds.includes(audId)) {
+            form.setValue('anggotaIds', anggotaIds.filter(id => id !== audId));
+        } else {
+            form.setValue('anggotaIds', [...anggotaIds, audId]);
+            if (pengawasTeknisId === audId) form.setValue('pengawasTeknisId', '');
+            if (ketuaTimId === audId) form.setValue('ketuaTimId', '');
         }
     };
 
     return (
-        <div className="bg-white p-5 rounded-none space-y-6 border border-slate-200 shadow-xs">
+        <div className="bg-white p-4 sm:p-5 rounded-none space-y-5 border border-slate-200 shadow-xs">
             {/* HEADER TOOLBAR */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-slate-100 pb-3">
                 <div>
@@ -270,12 +300,12 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                     <Info className="w-6 h-6 text-amber-600 mx-auto" />
                     <h4 className="text-xs font-bold text-amber-900">Semua Agenda PKPT Telah Memiliki Surat Tugas</h4>
                     <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
-                        Seluruh program pengawasan PKPT yang sah telah dijadwalkan, atau belum ada berkas PKPT yang diunggah ke sistem.
+                        Seluruh program pengawasan PKPT yang sah telah dijadwalkan.
                     </p>
                 </div>
             ) : (
                 <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
                         {/* BAGIAN 1: DROPDOWN ACUAN PKPT LEBAR */}
                         <div className="space-y-2">
                             <FormField
@@ -286,7 +316,7 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                         <FormLabel className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center justify-between">
                                             <span className="flex items-center gap-1.5">
                                                 <Layers className="w-3.5 h-3.5 text-blue-600" />
-                                                Pilih Acuan Agenda PKPT Resmi (Sah Ber-SK)
+                                                Pilih Acuan Agenda PKPT Resmi
                                             </span>
                                             <span className="text-[11px] font-normal text-blue-600 font-mono">
                                                 {activeAgendas.length} agenda siap ditugaskan
@@ -331,7 +361,13 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                                                     <span>&bull;</span>
                                                                     <span>Alokasi: {totalHp} HP</span>
                                                                     <span>&bull;</span>
-                                                                    <span className={prioritas === 'Tinggi' ? 'text-red-600 font-bold' : 'text-slate-600'}>
+                                                                    <span className={`text-[10px] font-bold px-1.5 py-0.2 border ${
+                                                                        prioritas === 'Tinggi'
+                                                                            ? 'text-red-700 bg-red-50 border-red-200'
+                                                                            : prioritas === 'Sedang'
+                                                                            ? 'text-amber-700 bg-amber-50 border-amber-200'
+                                                                            : 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                                                    }`}>
                                                                         Risiko {prioritas}
                                                                     </span>
                                                                 </div>
@@ -346,10 +382,10 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                 )}
                             />
 
-                            {/* PANEL RINCIAN ACUAN PKPT TERPILIH (CLEAN DIVIDER GRID, NO NESTED BOX) */}
+                            {/* PANEL RINCIAN ACUAN PKPT TERPILIH */}
                             {selectedAgenda && (
-                                <div className="border border-slate-200 p-4 rounded-none space-y-3 bg-white animate-in fade-in-50 duration-200">
-                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-100 pb-2.5">
+                                <div className="border border-slate-200 p-3.5 rounded-none space-y-2 bg-white">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-1.5 border-b border-slate-100 pb-2">
                                         <div className="flex items-center gap-2">
                                             <span className="text-xs font-bold text-blue-700">
                                                 {formatUnitKerja(selectedAgenda.substansiDokumen?.pelaksana)}
@@ -364,26 +400,23 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                         </span>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                                        <div className="space-y-1">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tujuan / Sasaran</p>
-                                            <p className="text-slate-700 leading-relaxed line-clamp-3">
-                                                {selectedAgenda.substansiDokumen?.tujuanSasaran || 'Pemeriksaan akuntabilitas dan kepatuhan program kerja.'}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Tujuan / Sasaran</p>
+                                            <p className="text-slate-700 leading-relaxed line-clamp-2 mt-0.5">
+                                                {selectedAgenda.substansiDokumen?.tujuanSasaran || 'Pemeriksaan akuntabilitas.'}
                                             </p>
                                         </div>
-                                        <div className="space-y-1 md:border-l md:border-slate-100 md:pl-4">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ruang Lingkup</p>
-                                            <p className="text-slate-700 leading-relaxed">
-                                                {selectedAgenda.substansiDokumen?.ruangLingkup || 'Seluruh Realisasi Belanja & Pelaksanaan Kegiatan'}
+                                        <div className="sm:border-l sm:border-slate-100 sm:pl-3">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Ruang Lingkup</p>
+                                            <p className="text-slate-700 leading-relaxed mt-0.5">
+                                                {selectedAgenda.substansiDokumen?.ruangLingkup || 'Seluruh Belanja Kegiatan'}
                                             </p>
                                         </div>
-                                        <div className="space-y-1 md:border-l md:border-slate-100 md:pl-4">
-                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alokasi &amp; Logistik</p>
-                                            <p className="font-mono font-bold text-slate-900">
-                                                {selectedAgenda.substansiDokumen?.hariPemeriksaan?.totalHp || 50} Hari Pemeriksaan ({selectedAgenda.substansiDokumen?.jadwal || 'TW I'})
-                                            </p>
-                                            <p className="text-[11px] text-slate-500 truncate">
-                                                Sarpras: {(selectedAgenda.substansiDokumen?.saranaPrasarana || ['Laptop', 'Printer', 'ATK']).join(', ')}
+                                        <div className="sm:border-l sm:border-slate-100 sm:pl-3">
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase">Alokasi HP &amp; Sarpras</p>
+                                            <p className="font-mono font-bold text-slate-900 mt-0.5">
+                                                {selectedAgenda.substansiDokumen?.hariPemeriksaan?.totalHp || 50} HP ({selectedAgenda.substansiDokumen?.jadwal || 'TW I'})
                                             </p>
                                         </div>
                                     </div>
@@ -391,23 +424,19 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                             )}
                         </div>
 
-                        {/* BAGIAN 2: NOMOR ST, JADWAL KALENDER & LOKASI */}
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                            {/* Nomor Surat Tugas (4 Kolom - Auto Generated) */}
+                        {/* BAGIAN 2: NOMOR ST, JADWAL & LOKASI */}
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
                             <div className="sm:col-span-4">
                                 <FormField
                                     control={form.control}
                                     name="noSt"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                                                <span>Nomor Surat Tugas</span>
-                                                <span className="text-[10px] text-blue-600 font-mono">Format Resmi</span>
-                                            </FormLabel>
+                                            <FormLabel className="text-xs font-semibold text-slate-700">Nomor Surat Tugas</FormLabel>
                                             <FormControl>
                                                 <Input 
                                                     className="rounded-none border-slate-300 text-xs focus:border-blue-500 h-9 font-mono font-semibold" 
-                                                    placeholder="Contoh: ST.700.1.2/015/ITDA-IRB.I/2026" 
+                                                    placeholder="ST.700.1.2/015/..." 
                                                     {...field} 
                                                 />
                                             </FormControl>
@@ -417,13 +446,12 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                 />
                             </div>
 
-                            {/* Jadwal Rentang Tanggal Audit (Kalender Interaktif Trigger - 5 Kolom) */}
                             <div className="sm:col-span-5">
                                 <div>
                                     <Label className="text-xs font-semibold text-slate-700 flex items-center justify-between">
                                         <span>Jadwal Rentang Tanggal Audit</span>
                                         <span className="text-[10px] text-blue-600 font-semibold flex items-center gap-1">
-                                            <Calendar className="w-3 h-3" /> Kalender Interaktif
+                                            <Calendar className="w-3 h-3" /> Kalender
                                         </span>
                                     </Label>
                                     <div 
@@ -440,31 +468,24 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                                                 )}
                                             </div>
                                         </div>
-
-                                        <span className="text-[10px] font-bold text-blue-700 hover:underline">
-                                            Pilih Kalender
-                                        </span>
+                                        <span className="text-[10px] font-bold text-blue-700">Pilih</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Lokasi / Objek Fisik (3 Kolom - Read Only Terkunci) */}
                             <div className="sm:col-span-3">
                                 <FormField
                                     control={form.control}
                                     name="lokasi"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel className="text-xs font-semibold text-slate-700 flex items-center justify-between">
-                                                <span>Lokasi &amp; Objek Fisik</span>
-                                                <span className="text-[10px] text-slate-400">Terkunci</span>
-                                            </FormLabel>
+                                            <FormLabel className="text-xs font-semibold text-slate-700">Lokasi / Objek Fisik</FormLabel>
                                             <FormControl>
                                                 <div className="relative">
                                                     <Input 
                                                         disabled
                                                         className="rounded-none border-slate-300 bg-slate-50 text-slate-700 text-xs h-9 pl-7 font-semibold" 
-                                                        placeholder="Pilih PKPT terlebih dahulu" 
+                                                        placeholder="Pilih PKPT dahulu" 
                                                         {...field} 
                                                     />
                                                     <MapPin className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5" />
@@ -477,161 +498,298 @@ export default function SuratTugasForm({ onSuccess }: SuratTugasFormProps) {
                             </div>
                         </div>
 
-                        {/* BAGIAN 3: SUSUN TIM AUDITOR (NO INITIAL AVATAR BOX, CLEAN FLAT DESIGN) */}
-                        <div className="space-y-3 border-t border-slate-100 pt-4">
+                        {/* BAGIAN 3: SUSUN TIM AUDITOR LAPANGAN */}
+                        <div className="space-y-3 border-t border-slate-100 pt-3">
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                                 <div>
                                     <Label className="text-xs font-bold text-slate-900 uppercase tracking-wider flex items-center gap-1.5">
                                         <Users className="w-4 h-4 text-blue-600" />
-                                        Susunan Tim Auditor Lapangan (Workload Profiler)
+                                        Susunan Tim Auditor Lapangan (Workload Capacity)
                                     </Label>
                                     <p className="text-[11px] text-slate-500 mt-0.5">
-                                        Klik tombol **PT** (Pengawas Teknis/Dalnis), **KT** (Ketua Tim), atau **AT** (Anggota Tim) untuk menunjuk personil.
+                                        Tunjuk personil dengan tombol <strong>PT</strong> (Pengawas), <strong>KT</strong> (Ketua), atau <strong>AT</strong> (Anggota).
                                     </p>
                                 </div>
-                                <div className="flex items-center gap-3 text-[11px] text-slate-500 font-medium">
-                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Tersedia (0 ST)</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500" /> 1-2 ST Aktif</span>
-                                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500" /> Beban Penuh (≥3 ST)</span>
+
+                                <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> 0 ST</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" /> 1-2 ST</span>
+                                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> &ge;3 ST</span>
                                 </div>
                             </div>
 
-                            {/* Grid Kartu Auditor (Clean Profile, NO AVATAR INITIAL BOX) */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {auditorList.map(aud => {
-                                    const isPT = pengawasTeknisId === aud.id;
-                                    const isKT = ketuaTimId === aud.id;
-                                    const isAT = anggotaIds.includes(aud.id);
+                            {/* STICKY SELECTED TEAM ROSTER TRAY */}
+                            {totalSelectedCount > 0 && (
+                                <div className="bg-blue-50/70 border border-blue-200 p-2.5 space-y-1.5 animate-in fade-in-50 duration-150">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="font-bold text-blue-900 flex items-center gap-1">
+                                            <Check className="w-3.5 h-3.5 text-blue-700" />
+                                            Susunan Tim Terpilih ({totalSelectedCount} Personil):
+                                        </span>
+                                        <span className="text-[10px] text-blue-700 font-mono">Siap Diterbitkan</span>
+                                    </div>
 
-                                    const isBusy = aud.workloadLevel === 'PENUH';
-                                    const isModerate = aud.workloadLevel === 'SEDANG';
+                                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                                        {ptObj && (
+                                            <span className="bg-white border border-blue-300 px-2 py-0.5 text-slate-800 flex items-center gap-1 text-[11px]">
+                                                <strong className="text-blue-700">PT:</strong> {ptObj.nama}
+                                                <button type="button" onClick={() => form.setValue('pengawasTeknisId', '')} className="text-slate-400 hover:text-red-600 ml-1">
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </span>
+                                        )}
+                                        {ktObj && (
+                                            <span className="bg-white border border-amber-300 px-2 py-0.5 text-slate-800 flex items-center gap-1 text-[11px]">
+                                                <strong className="text-amber-700">KT:</strong> {ktObj.nama}
+                                                <button type="button" onClick={() => form.setValue('ketuaTimId', '')} className="text-slate-400 hover:text-red-600 ml-1">
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </span>
+                                        )}
+                                        {atObjs.map(at => (
+                                            <span key={at.id} className="bg-white border border-emerald-300 px-2 py-0.5 text-slate-800 flex items-center gap-1 text-[11px]">
+                                                <strong className="text-emerald-700">AT:</strong> {at.nama}
+                                                <button type="button" onClick={() => form.setValue('anggotaIds', anggotaIds.filter(id => id !== at.id))} className="text-slate-400 hover:text-red-600 ml-1">
+                                                    <X className="w-3 h-3" />
+                                                </button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
-                                    return (
-                                        <div 
-                                            key={aud.id} 
-                                            className={`p-3.5 flex flex-col justify-between space-y-2.5 transition-all rounded-none border ${
-                                                isPT ? 'border-blue-600 bg-blue-50/20' :
-                                                isKT ? 'border-amber-600 bg-amber-50/20' :
-                                                isAT ? 'border-emerald-600 bg-emerald-50/20' :
-                                                'border-slate-200 bg-white hover:border-slate-300'
-                                            }`}
-                                        >
-                                            {/* Header Profil Pegawai (NO INITIAL BOX) */}
-                                            <div className="space-y-0.5">
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <h4 className="text-xs font-bold text-slate-900 leading-snug" title={aud.nama}>
-                                                        {aud.nama}
-                                                    </h4>
-                                                    <span className={`text-[10px] font-semibold shrink-0 ${
-                                                        isBusy 
-                                                            ? 'text-red-600' 
-                                                            : isModerate 
-                                                            ? 'text-amber-600' 
-                                                            : 'text-emerald-600'
-                                                    }`}>
-                                                        {aud.activeStCount === 0 ? '0 ST Aktif' : `${aud.activeStCount} ST Aktif`}
+                            {/* TAB FILTER IRBAN + TAB "TIM TERPILIH" + SEARCH BAR */}
+                            <div className="space-y-3">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-200 pb-1.5">
+                                    <div className="flex overflow-x-auto gap-1 w-full sm:w-auto">
+                                        {TAB_FILTERS.map(tab => {
+                                            const isActive = auditorTab === tab.key;
+                                            const count = tab.key === 'ALL' 
+                                                ? auditorList.length 
+                                                : tab.key === 'SELECTED' 
+                                                ? totalSelectedCount 
+                                                : auditorList.filter(a => a.unitKerja === tab.key).length;
+
+                                            return (
+                                                <button
+                                                    key={tab.key}
+                                                    type="button"
+                                                    onClick={() => setAuditorTab(tab.key)}
+                                                    className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors border-b-2 flex items-center gap-1 ${
+                                                        isActive
+                                                            ? 'border-blue-600 text-blue-700 font-bold bg-blue-50/50'
+                                                            : 'border-transparent text-slate-600 hover:text-slate-900'
+                                                    }`}
+                                                >
+                                                    {tab.label}
+                                                    <span className={`text-[10px] font-mono ${isActive ? 'text-blue-700' : 'text-slate-400'}`}>
+                                                        ({count})
                                                     </span>
-                                                </div>
-                                                <p className="text-[10px] text-slate-400 font-mono">NIP. {aud.nip}</p>
-                                            </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
 
-                                            {/* Jabatan & Unit Irban Terformat Resmi */}
-                                            <div className="space-y-1">
-                                                <div className="flex items-center justify-between text-[11px]">
-                                                    <span className="text-slate-600 truncate max-w-[150px]">{aud.jabatan || 'Auditor'}</span>
-                                                    <span className="text-slate-500 font-medium">
-                                                        {formatUnitKerja(aud.unitKerja)}
-                                                    </span>
-                                                </div>
+                                    {/* Quick Search Personil */}
+                                    <div className="w-full sm:w-48 relative">
+                                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5" />
+                                        <input
+                                            type="text"
+                                            value={auditorSearch}
+                                            onChange={(e) => setAuditorSearch(e.target.value)}
+                                            placeholder="Cari personil..."
+                                            className="w-full h-8 pl-7 pr-2 text-xs border border-slate-200 outline-none bg-white placeholder-slate-400 text-slate-700"
+                                        />
+                                    </div>
+                                </div>
 
-                                                {/* Role Label jika aktif */}
-                                                <div className="h-4">
-                                                    {isPT && <span className="text-[9px] font-bold text-blue-700 uppercase">Pengawas Teknis (Dalnis)</span>}
-                                                    {isKT && <span className="text-[9px] font-bold text-amber-700 uppercase">Ketua Tim (KT)</span>}
-                                                    {isAT && <span className="text-[9px] font-bold text-emerald-700 uppercase">Anggota Tim (AT)</span>}
-                                                </div>
-                                            </div>
+                                {filteredAuditors.length === 0 ? (
+                                    <div className="p-8 text-center text-xs text-slate-400 border border-slate-200 bg-white">
+                                        {auditorTab === 'SELECTED' 
+                                            ? 'Belum ada personil yang dipilih ke dalam tim.' 
+                                            : 'Tidak ada personil yang cocok dengan filter / pencarian.'}
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* 1. TAMPILAN DESKTOP & LAPTOP (CARD GRID 3-KOLOM LAPANG) */}
+                                        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                            {filteredAuditors.map(aud => {
+                                                const isPT = pengawasTeknisId === aud.id;
+                                                const isKT = ketuaTimId === aud.id;
+                                                const isAT = anggotaIds.includes(aud.id);
+                                                const isBusy = aud.workloadLevel === 'PENUH';
+                                                const isModerate = aud.workloadLevel === 'SEDANG';
 
-                                            {/* Bar Tombol Peran (PT, KT, AT) */}
-                                            <div className="grid grid-cols-3 gap-1.5 pt-2 border-t border-slate-100">
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    onClick={() => {
-                                                        if (isPT) {
-                                                            form.setValue('pengawasTeknisId', '');
-                                                        } else {
-                                                            form.setValue('pengawasTeknisId', aud.id);
-                                                            if (isKT) form.setValue('ketuaTimId', '');
-                                                            if (isAT) form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
-                                                        }
-                                                    }}
-                                                    className={`h-6 text-[10px] font-bold rounded-none p-0 ${
-                                                        isPT ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                                    }`}
-                                                >
-                                                    PT
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    onClick={() => {
-                                                        if (isKT) {
-                                                            form.setValue('ketuaTimId', '');
-                                                        } else {
-                                                            form.setValue('ketuaTimId', aud.id);
-                                                            if (isPT) form.setValue('pengawasTeknisId', '');
-                                                            if (isAT) form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
-                                                        }
-                                                    }}
-                                                    className={`h-6 text-[10px] font-bold rounded-none p-0 ${
-                                                        isKT ? 'bg-amber-600 text-white hover:bg-amber-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                                    }`}
-                                                >
-                                                    KT
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    onClick={() => {
-                                                        if (isAT) {
-                                                            form.setValue('anggotaIds', anggotaIds.filter(id => id !== aud.id));
-                                                        } else {
-                                                            form.setValue('anggotaIds', [...anggotaIds, aud.id]);
-                                                            if (isPT) form.setValue('pengawasTeknisId', '');
-                                                            if (isKT) form.setValue('ketuaTimId', '');
-                                                        }
-                                                    }}
-                                                    className={`h-6 text-[10px] font-bold rounded-none p-0 ${
-                                                        isAT ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
-                                                    }`}
-                                                >
-                                                    AT
-                                                </Button>
-                                            </div>
+                                                return (
+                                                    <div 
+                                                        key={aud.id} 
+                                                        className={`p-3 flex flex-col justify-between space-y-2 transition-all rounded-none border ${
+                                                            isPT ? 'border-blue-600 bg-blue-50/30' :
+                                                            isKT ? 'border-amber-600 bg-amber-50/30' :
+                                                            isAT ? 'border-emerald-600 bg-emerald-50/30' :
+                                                            'border-slate-200 bg-white hover:border-slate-300'
+                                                        }`}
+                                                    >
+                                                        {/* Header Profil */}
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex justify-between items-start gap-1.5">
+                                                                <h4 className="text-xs font-bold text-slate-900 leading-snug line-clamp-1" title={aud.nama}>
+                                                                    {aud.nama}
+                                                                </h4>
+                                                                <span className={`text-[10px] font-semibold shrink-0 ${
+                                                                    isBusy ? 'text-red-600' : isModerate ? 'text-amber-600' : 'text-emerald-600'
+                                                                }`}>
+                                                                    {aud.activeStCount} ST Aktif
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-400 font-mono">NIP. {aud.nip}</p>
+                                                        </div>
+
+                                                        {/* Jabatan & Unit Irban */}
+                                                        <div className="space-y-1">
+                                                            <div className="flex items-center justify-between text-[11px]">
+                                                                <span className="text-slate-600 truncate max-w-[140px]">{aud.jabatan || 'Auditor'}</span>
+                                                                <span className="text-slate-500 font-medium text-[10px]">
+                                                                    {formatUnitKerja(aud.unitKerja)}
+                                                                </span>
+                                                            </div>
+
+                                                            {/* Label Penugasan Aktif */}
+                                                            <div className="h-4">
+                                                                {isPT && <span className="text-[9px] font-bold text-blue-700 uppercase">Pengawas Teknis (PT)</span>}
+                                                                {isKT && <span className="text-[9px] font-bold text-amber-700 uppercase">Ketua Tim (KT)</span>}
+                                                                {isAT && <span className="text-[9px] font-bold text-emerald-700 uppercase">Anggota Tim (AT)</span>}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Bar Tombol Peran Tim */}
+                                                        <div className="grid grid-cols-3 gap-1 pt-1.5 border-t border-slate-100">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                onClick={() => handleTogglePT(aud.id)}
+                                                                className={`h-6 text-[10px] font-bold rounded-none p-0 ${
+                                                                    isPT ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                                }`}
+                                                            >
+                                                                PT
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                onClick={() => handleToggleKT(aud.id)}
+                                                                className={`h-6 text-[10px] font-bold rounded-none p-0 ${
+                                                                    isKT ? 'bg-amber-600 text-white hover:bg-amber-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                                }`}
+                                                            >
+                                                                KT
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                onClick={() => handleToggleAT(aud.id)}
+                                                                className={`h-6 text-[10px] font-bold rounded-none p-0 ${
+                                                                    isAT ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                                }`}
+                                                            >
+                                                                AT
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    );
-                                })}
-                            </div>
 
-                            <FormField
-                                control={form.control}
-                                name="ketuaTimId"
-                                render={() => <FormMessage className="text-[10px]" />}
-                            />
+                                        {/* 2. TAMPILAN MOBILE & SMALL TABLET (COMPACT SCROLLABLE ROW LIST) */}
+                                        <div className="block md:hidden max-h-[300px] overflow-y-auto border border-slate-200 divide-y divide-slate-100 bg-white">
+                                            {filteredAuditors.map(aud => {
+                                                const isPT = pengawasTeknisId === aud.id;
+                                                const isKT = ketuaTimId === aud.id;
+                                                const isAT = anggotaIds.includes(aud.id);
+                                                const isBusy = aud.workloadLevel === 'PENUH';
+                                                const isModerate = aud.workloadLevel === 'SEDANG';
+
+                                                return (
+                                                    <div 
+                                                        key={aud.id} 
+                                                        className={`p-2 flex items-center justify-between gap-2 transition-colors ${
+                                                            isPT ? 'bg-blue-50/40' :
+                                                            isKT ? 'bg-amber-50/40' :
+                                                            isAT ? 'bg-emerald-50/40' :
+                                                            'hover:bg-slate-50'
+                                                        }`}
+                                                    >
+                                                        {/* Profil Singkat */}
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="font-bold text-slate-900 text-xs truncate">{aud.nama}</span>
+                                                                <span className={`text-[9px] font-semibold shrink-0 ${
+                                                                    isBusy ? 'text-red-600' : isModerate ? 'text-amber-600' : 'text-emerald-600'
+                                                                }`}>
+                                                                    &bull; {aud.activeStCount} ST
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-400 truncate">
+                                                                {formatUnitKerja(aud.unitKerja)} &bull; {aud.jabatan || 'Auditor'}
+                                                            </p>
+                                                        </div>
+
+                                                        {/* Tombol Peran */}
+                                                        <div className="flex items-center gap-1 shrink-0">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleTogglePT(aud.id)}
+                                                                className={`h-6 text-[10px] font-bold rounded-none px-2 ${
+                                                                    isPT ? 'bg-blue-600 text-white hover:bg-blue-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                                }`}
+                                                            >
+                                                                PT
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleToggleKT(aud.id)}
+                                                                className={`h-6 text-[10px] font-bold rounded-none px-2 ${
+                                                                    isKT ? 'bg-amber-600 text-white hover:bg-amber-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                                }`}
+                                                            >
+                                                                KT
+                                                            </Button>
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleToggleAT(aud.id)}
+                                                                className={`h-6 text-[10px] font-bold rounded-none px-2 ${
+                                                                    isAT ? 'bg-emerald-600 text-white hover:bg-emerald-700' : 'text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                                                }`}
+                                                            >
+                                                                AT
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </>
+                                )}
+                            </div>
                         </div>
 
                         {/* SUBMIT BUTTON BAR */}
-                        <div className="pt-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                             <p className="text-xs text-slate-500">
-                                Draf Surat Tugas akan langsung diajukan ke menu verifikasi &amp; TTE Inspektur Utama.
+                                Draf Surat Tugas akan diajukan ke menu verifikasi &amp; TTE Inspektur.
                             </p>
                             <Button 
                                 type="submit" 
                                 disabled={createStMutation.isPending}
-                                className="bg-blue-600 hover:bg-blue-700 rounded-none text-xs font-bold shadow-none px-6 h-9"
+                                className="bg-blue-600 hover:bg-blue-700 rounded-none text-xs font-bold shadow-none px-6 h-9 w-full sm:w-auto"
                             >
-                                {createStMutation.isPending ? 'Menerbitkan Draf...' : 'Terbitkan Draf Surat Tugas'}
+                                {createStMutation.isPending ? 'Menerbitkan...' : 'Terbitkan Draf Surat Tugas'}
                             </Button>
                         </div>
                     </form>

@@ -127,8 +127,8 @@ export default function Sidebar() {
                         const isActive = item.href === '/' 
                             ? pathname === '/' 
                             : pathname === item.href || pathname.startsWith(item.href + '/');
-                        const displayName = item.href === '/penugasan/draf-st' && role === 'AUDITOR'
-                            ? 'Penugasan Saya'
+                        const displayName = item.href === '/penugasan/draf-st'
+                            ? (role === 'APIP_PIMPINAN' ? 'Pengesahan ST (TTE)' : role === 'AUDITOR' ? 'Penugasan Saya' : item.name)
                             : item.name;
 
                         return (

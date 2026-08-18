@@ -67,13 +67,34 @@ export default function DrafStPage() {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
                         <FileText className="w-6 h-6 text-blue-600" />
-                        Manajemen & Pengesahan Surat Tugas (ST)
+                        {isAuditor ? 'Penugasan Saya & Pelaksanaan Audit Lapangan' : 'Manajemen & Pengesahan Surat Tugas (ST)'}
                     </h1>
                     <p className="text-slate-500 text-sm mt-1">
-                        Workspace Peran: <strong className="text-blue-600">{isInspektur ? 'Inspektur Utama' : isAuditor ? 'Tim Audit (Assignments)' : 'Kasubag Perencanaan'}</strong>
+                        Workspace Peran: <strong className="text-blue-600">{isInspektur ? 'Inspektur Utama (Otorisasi & TTE)' : isAuditor ? 'Ketua Tim Pemeriksa (Budi Santoso, S.E., Ak.)' : 'Kasubag Perencanaan (Draf ST)'}</strong>
                     </p>
                 </div>
             </div>
+
+            {/* BANNER INFORMASI PENUGASAN KHUSUS AUDITOR */}
+            {isAuditor && (
+                <div className="bg-slate-900 text-white p-4 border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div className="space-y-0.5">
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-blue-500/20 text-blue-400 px-2 py-0.5 border border-blue-500/30 font-mono">
+                            SASARAN PENGAWASAN AKTIF
+                        </span>
+                        <h3 className="text-sm font-bold text-white mt-1">
+                            Objek Audit: <span className="text-blue-400">Dinas Pendidikan Kota Surabaya</span>
+                        </h3>
+                        <p className="text-xs text-slate-400">
+                            Program: Evaluasi Rencana Kerja &amp; Kepatuhan Keuangan &bull; Wilayah Kerja: Irban Wilayah I
+                        </p>
+                    </div>
+                    <div className="text-right text-xs text-slate-300 bg-slate-800/80 px-3 py-1.5 border border-slate-700 font-mono">
+                        <p className="text-[10px] text-slate-400">Status Kedudukan Tim:</p>
+                        <p className="font-bold text-emerald-400">Ketua Tim (Auditor Senior)</p>
+                    </div>
+                </div>
+            )}
 
             {/* FORM PEMBUATAN (Hanya terlihat oleh Kasubag Perencanaan) */}
             {isKasubag && (

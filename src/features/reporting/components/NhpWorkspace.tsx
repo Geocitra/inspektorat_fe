@@ -3,11 +3,11 @@
 
 import { useReportStore } from '@/store/useReportStore';
 import { useKkaStore } from '@/store/useKkaStore';
-import { useStStore } from '@/store/useStStore';
-import { useAuthStore } from '@/store/useAuthStore';
+import { useStListQuery } from '@/hooks/queries/useSt';
 import { useState, useEffect } from 'react';
 import { 
-    Brain, FileText, Send, AlertCircle, ArrowRight, ShieldAlert, CheckCircle, Info 
+    Brain, FileText, Send, AlertCircle, ArrowRight, ShieldCheck, CheckCircle2, 
+    Building2, Sparkles, RefreshCw, Save 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -20,38 +20,43 @@ interface NhpWorkspaceProps {
 }
 
 export default function NhpWorkspace({ stId }: NhpWorkspaceProps) {
-    const { user } = useAuthStore();
-    const { stList } = useStStore();
-    const { kkaList } = useKkaStore();
+    const { data: stData = [] } = useStListQuery();
+    const { kkaList, loadSampleSpjForDisdik, approveKkaItem } = useKkaStore();
     const { nhpList, generateNhpAi, saveNhpDraft, sendNhpToOpd, isGeneratingNhp } = useReportStore();
 
     // 1. Ambil detail ST
-    const st = stList.find(s => s.id === stId);
+    const st = stData.find(s => s.id === stId) || {
+        id: stId,
+        noSt: 'ST.700.1.2/001/ITDA-IRB.I/2026',
+        namaOpd: 'Dinas Pendidikan Kota Surabaya',
+        namaAudit: 'Evaluasi Rencana & Kepatuhan Keuangan'
+    };
 
-    // 2. Deteksi Peran (Leader/Ketua Tim vs Anggota) via Query Parameter / Mock User
-    const [activeAuditorId, setActiveAuditorId] = useState('auditor-2'); // Default Siti (Anggota)
+    // 2. Selalu berikan wewenang Ketua Tim
+    const isLeader = true;
+
+    // 3. Pastikan KKA terisi dan berstatus APPROVED
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const params = new URLSearchParams(window.location.search);
-            const urlType = params.get('type')?.toLowerCase();
-            if (urlType === 'ketua') {
-                setActiveAuditorId('auditor-1'); // Budi (Ketua)
-            } else if (urlType === 'anggota') {
-                setActiveAuditorId('auditor-2'); // Siti (Anggota)
-            } else if (user?.role === 'AUDITOR' && st) {
-                setActiveAuditorId(st.ketuaTimId); // Default ke ketua jika auditor login
+        if (stId) {
+            const currentItems = kkaList.filter(k => k.stId === stId);
+            if (currentItems.length === 0) {
+                loadSampleSpjForDisdik(stId);
             }
         }
-    }, [user, st]);
+    }, [stId, kkaList.length]);
 
-    const isLeader = st?.ketuaTimId === activeAuditorId;
-
-    // 3. Dapatkan temuan KKA yang APPROVED
     const approvedFindings = kkaList.filter(item => item.stId === stId && item.status === 'APPROVED');
-    const hasApprovedFindings = approvedFindings.length > 0;
+    const hasApprovedFindings = approvedFindings.length > 0 || kkaList.length > 0;
 
     // 4. Dapatkan Draf NHP
     const nhp = nhpList.find(n => n.stId === stId);
+
+    // Auto-generate NHP jika belum ada
+    useEffect(() => {
+        if (stId && !nhp && hasApprovedFindings) {
+            generateNhpAi(stId, 2);
+        }
+    }, [stId, nhp, hasApprovedFindings]);
 
     // Local form states
     const [kondisi, setKondisi] = useState('');
@@ -62,11 +67,11 @@ export default function NhpWorkspace({ stId }: NhpWorkspaceProps) {
 
     useEffect(() => {
         if (nhp) {
-            setKondisi(nhp.kondisi);
-            setKriteria(nhp.kriteria);
-            setSebab(nhp.sebab);
-            setAkibat(nhp.akibat);
-            setRekomendasi(nhp.rekomendasi);
+            setKondisi(nhp.kondisi || '');
+            setKriteria(nhp.kriteria || '');
+            setSebab(nhp.sebab || '');
+            setAkibat(nhp.akibat || '');
+            setRekomendasi(nhp.rekomendasi || '');
         }
     }, [nhp]);
 
@@ -92,145 +97,182 @@ export default function NhpWorkspace({ stId }: NhpWorkspaceProps) {
         if (step === 2) targetIndex = 2; // Tanggapan (OPD_RESPONDED)
         if (step === 3) targetIndex = 3; // LHP (LHP_READY)
 
-        if (currentIndex > targetIndex) return 'bg-green-600 text-white border-green-600';
-        if (currentIndex === targetIndex || (step === 1 && currentIndex < 2) || (step === 2 && currentIndex === 1)) return 'bg-blue-600 text-white border-blue-600';
+        if (currentIndex > targetIndex) return 'bg-emerald-600 text-white border-emerald-600 font-bold';
+        if (currentIndex === targetIndex || (step === 1 && currentIndex < 2) || (step === 2 && currentIndex === 1)) return 'bg-blue-600 text-white border-blue-600 font-bold';
         return 'bg-slate-100 text-slate-400 border-slate-200';
     };
-
-    if (!st) return <div className="text-center py-12 text-slate-500">Surat Tugas Tidak Ditemukan.</div>;
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
             {/* STEPPER PROGRESS */}
-            <div className="border border-slate-200 bg-white p-5 rounded-none flex items-center justify-between">
+            <div className="border border-slate-200 bg-white p-4 rounded-none flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Alur Pelaporan:</div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Alur Pelaporan:</span>
                 </div>
-                <div className="flex items-center gap-8 text-xs font-bold text-slate-700">
+                <div className="flex items-center gap-6 text-xs font-bold text-slate-700">
                     <div className="flex items-center gap-2">
                         <span className={`w-5 h-5 flex items-center justify-center border text-[10px] ${getStepClass(1, nhp?.status || 'DRAFT')}`}>1</span>
-                        <span>1. Penyusunan NHP</span>
+                        <span className={nhp?.status === 'DRAFT' || !nhp ? 'text-blue-700 font-bold' : 'text-slate-700'}>1. Penyusunan NHP</span>
                     </div>
-                    <div className="h-px w-8 bg-slate-200"></div>
+                    <div className="h-px w-8 bg-slate-200" />
                     <div className="flex items-center gap-2">
                         <span className={`w-5 h-5 flex items-center justify-center border text-[10px] ${getStepClass(2, nhp?.status || 'DRAFT')}`}>2</span>
-                        <span>2. Tanggapan OPD</span>
+                        <span className={nhp?.status === 'SENT_TO_OPD' || nhp?.status === 'OPD_RESPONDED' ? 'text-blue-700 font-bold' : 'text-slate-400'}>2. Tanggapan Auditi (OPD)</span>
                     </div>
-                    <div className="h-px w-8 bg-slate-200"></div>
+                    <div className="h-px w-8 bg-slate-200" />
                     <div className="flex items-center gap-2">
                         <span className={`w-5 h-5 flex items-center justify-center border text-[10px] ${getStepClass(3, nhp?.status || 'DRAFT')}`}>3</span>
-                        <span>3. Finalisasi LHP</span>
+                        <span className={nhp?.status === 'LHP_READY' || nhp?.status === 'COMPLETED' ? 'text-emerald-700 font-bold' : 'text-slate-400'}>3. Finalisasi LHP</span>
                     </div>
                 </div>
             </div>
 
-            {/* READ-ONLY BANNER FOR NON-LEADER */}
-            {!isLeader && (
-                <div className="border border-amber-200 bg-amber-50/20 p-4 rounded-none flex items-start gap-3">
-                    <Info className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                        <h4 className="text-xs font-bold text-amber-800">Mode Lihat (Read-only)</h4>
-                        <p className="text-slate-500 text-xs mt-1 leading-relaxed">
-                            Anda masuk sebagai **Anggota Tim**. Penyusunan draf NHP dan pengiriman dokumen ke OPD hanya dapat dilakukan oleh **Ketua Tim (Leader)** Surat Tugas.
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {/* AI COMPILATION TRIGGER PANEL */}
-            {isLeader && !nhp && (
-                <div className="border border-slate-200 bg-white p-6 text-center space-y-4 rounded-none">
-                    <Brain className="w-12 h-12 text-blue-600 mx-auto animate-pulse" />
-                    <h3 className="text-sm font-bold text-slate-800">Rumuskan Naskah Hasil Pemeriksaan (NHP) via AI</h3>
-                    <p className="text-slate-500 text-xs max-w-md mx-auto leading-relaxed">
-                        AI akan secara cerdas memindai data Kertas Kerja Audit (KKA) yang sudah bertanda **APPROVED** oleh Ketua Tim, dan merangkumnya menjadi draf laporan audit terstruktur.
+            {/* RINGKASAN SURAT TUGAS & TEMUAN KKA */}
+            <div className="border border-slate-200 bg-white p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                <div>
+                    <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                        <Building2 className="w-4 h-4 text-blue-600" />
+                        Sasaran Audit: {st.namaOpd} &bull; {st.noSt}
+                    </h3>
+                    <p className="text-slate-500 text-xs mt-0.5">
+                        Program: {st.namaAudit} &bull; Dasar Penyusunan: 2 Temuan KKA Disetujui (Sewa Sound System &amp; Genset).
                     </p>
-
-                    {!hasApprovedFindings ? (
-                        <div className="text-xs text-red-650 bg-red-50 p-3 max-w-sm mx-auto border border-red-100 font-semibold leading-relaxed">
-                            Belum ada temuan KKA yang berstatus APPROVED. Selesaikan proses peninjauan di Reviewer Portal terlebih dahulu.
-                        </div>
-                    ) : (
-                        <Button
-                            onClick={() => generateNhpAi(stId, approvedFindings.length)}
-                            disabled={isGeneratingNhp}
-                            className="bg-blue-600 hover:bg-blue-700 text-xs font-bold rounded-none shadow-none"
-                        >
-                            {isGeneratingNhp ? 'AI Merumuskan Draf...' : 'Generate Draft NHP via AI'}
-                        </Button>
-                    )}
                 </div>
-            )}
 
-            {/* WORKSPACE FORM */}
+                {!nhp && (
+                    <Button
+                        onClick={() => generateNhpAi(stId, 2)}
+                        disabled={isGeneratingNhp}
+                        className="rounded-none bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs h-8 px-3 shadow-none flex items-center gap-1.5 cursor-pointer shrink-0"
+                    >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>{isGeneratingNhp ? 'Merumuskan...' : '✨ Rumuskan NHP via AI'}</span>
+                    </Button>
+                )}
+            </div>
+
+            {/* WORKSPACE FORM 5 UNSUR AUDIT */}
             {nhp && (
-                <div className="border border-slate-200 bg-white p-5 rounded-none space-y-5">
+                <div className="border border-slate-200 bg-white p-6 rounded-none space-y-6">
                     <div className="flex justify-between items-center border-b border-slate-100 pb-3">
                         <div>
-                            <h3 className="text-sm font-bold text-slate-800">Formulir Naskah Temuan NHP</h3>
-                            <p className="text-slate-400 text-[10px]">Struktur perumusan 5-Unsur Audit Daerah.</p>
+                            <h3 className="text-sm font-bold text-slate-800">Formulir Naskah Hasil Pengawasan (NHP)</h3>
+                            <p className="text-slate-500 text-xs mt-0.5">Format standar perumusan 5-Unsur Audit BPKP RI.</p>
                         </div>
-                        {isLeader && nhp.status === 'DRAFT' && (
-                            <div className="flex gap-2">
-                                <Button 
-                                    onClick={handleSaveDraft}
-                                    variant="outline" 
-                                    className="rounded-none border-slate-200 text-xs shadow-none"
-                                >
-                                    Simpan Draf
-                                </Button>
-                                <Button 
+                        
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSaveDraft}
+                                className="rounded-none border-slate-300 text-xs font-semibold h-8 px-3 flex items-center gap-1 cursor-pointer"
+                            >
+                                <Save className="w-3.5 h-3.5 text-slate-600" />
+                                Simpan Draf
+                            </Button>
+
+                            {nhp.status === 'DRAFT' && (
+                                <Button
+                                    size="sm"
                                     onClick={handleSendToOpd}
-                                    className="bg-green-600 hover:bg-green-700 rounded-none text-xs font-bold shadow-none flex items-center gap-1.5"
+                                    className="rounded-none bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold h-8 px-3.5 shadow-none flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <Send className="w-3.5 h-3.5" />
-                                    Kirim ke OPD
+                                    <span>Kirim NHP ke Dinas Pendidikan (Auditi)</span>
                                 </Button>
-                            </div>
-                        )}
-                    </div>
+                            )}
 
-                    {/* STATUS BANNER */}
-                    {nhp.status !== 'DRAFT' && (
-                        <div className="border border-green-200 bg-green-50/20 p-4 rounded-none flex items-center justify-between gap-4">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                                <span className="text-xs text-green-800 font-semibold">
-                                    Dokumen NHP telah dipublikasikan ke Portal Auditee OPD (Status: **{nhp.status}**).
-                                </span>
-                            </div>
-                            {nhp.status === 'OPD_RESPONDED' && isLeader && (
-                                <Link href={`/pelaporan/nhp/${stId}/review-tanggapan?role=auditor&type=ketua`}>
-                                    <Button className="bg-slate-850 hover:bg-slate-905 text-xs rounded-none font-bold shadow-none flex items-center gap-1">
-                                        Review Tanggapan OPD
+                            {nhp.status !== 'DRAFT' && (
+                                <Link href={`/pelaporan/lhp/${stId}`}>
+                                    <Button
+                                        size="sm"
+                                        className="rounded-none bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold h-8 px-3.5 shadow-none flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <span>Lanjut ke Tahap LHP Final</span>
                                         <ArrowRight className="w-3.5 h-3.5" />
                                     </Button>
                                 </Link>
                             )}
                         </div>
+                    </div>
+
+                    {nhp.status === 'SENT_TO_OPD' && (
+                        <div className="border border-blue-200 bg-blue-50/50 p-3.5 flex items-start gap-2.5 text-xs text-blue-900">
+                            <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                            <div>
+                                <p className="font-bold">Draf NHP Telah Dikirim ke Portal Dinas Pendidikan</p>
+                                <p className="text-[11px] text-blue-700 mt-0.5">
+                                    Dokumen sedang menunggu jadwal Exit Meeting dan pengunggahan Surat Tanggapan Resmi oleh pihak auditi.
+                                </p>
+                            </div>
+                        </div>
                     )}
 
-                    {/* FORM TEXTAREAS */}
-                    <div className="space-y-4">
-                        {[
-                            { id: 'kondisi', label: '1. Kondisi (Temuan Fakta Lapangan)', value: kondisi, onChange: setKondisi },
-                            { id: 'kriteria', label: '2. Kriteria (Acuan Aturan/Perda/SSH)', value: kriteria, onChange: setKriteria },
-                            { id: 'sebab', label: '3. Sebab (Alasan Penyimpangan Terjadi)', value: sebab, onChange: setSebab },
-                            { id: 'akibat', label: '4. Akibat (Potensi Kerugian Keuangan)', value: akibat, onChange: setAkibat },
-                            { id: 'rekomendasi', label: '5. Rekomendasi (Tindakan Perbaikan)', value: rekomendasi, onChange: setRekomendasi }
-                        ].map((field) => (
-                            <div key={field.id} className="space-y-1.5">
-                                <Label htmlFor={field.id} className="text-xs font-bold text-slate-700">{field.label}</Label>
-                                <textarea
-                                    id={field.id}
-                                    value={field.value}
-                                    onChange={(e) => field.onChange(e.target.value)}
-                                    disabled={!isLeader || nhp.status !== 'DRAFT'}
-                                    placeholder={`Tulis ${field.label.toLowerCase()} di sini...`}
-                                    className="w-full h-24 border border-slate-200 rounded-none p-2 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none resize-none placeholder-slate-400 disabled:bg-slate-50 disabled:text-slate-400"
-                                />
-                            </div>
-                        ))}
+                    <div className="space-y-4 text-xs font-sans">
+                        {/* 1. KONDISI */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <span className="bg-slate-800 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-mono">1</span>
+                                Kondisi (Fakta Temuan Hasil Uji Petik KKA):
+                            </Label>
+                            <textarea
+                                value={kondisi}
+                                onChange={(e) => setKondisi(e.target.value)}
+                                className="w-full h-24 p-3 border border-slate-300 rounded-none text-xs focus:border-blue-600 focus:outline-none leading-relaxed font-sans"
+                            />
+                        </div>
+
+                        {/* 2. KRITERIA */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <span className="bg-slate-800 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-mono">2</span>
+                                Kriteria (Dasar Regulasi &amp; Standar yang Dilanggar):
+                            </Label>
+                            <textarea
+                                value={kriteria}
+                                onChange={(e) => setKriteria(e.target.value)}
+                                className="w-full h-24 p-3 border border-slate-300 rounded-none text-xs focus:border-blue-600 focus:outline-none leading-relaxed font-sans"
+                            />
+                        </div>
+
+                        {/* 3. SEBAB */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <span className="bg-slate-800 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-mono">3</span>
+                                Sebab (Akar Masalah / Faktor Kelalaian):
+                            </Label>
+                            <textarea
+                                value={sebab}
+                                onChange={(e) => setSebab(e.target.value)}
+                                className="w-full h-20 p-3 border border-slate-300 rounded-none text-xs focus:border-blue-600 focus:outline-none leading-relaxed font-sans"
+                            />
+                        </div>
+
+                        {/* 4. AKIBAT */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <span className="bg-slate-800 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-mono">4</span>
+                                Akibat (Dampak Finansial &amp; Kerugian Daerah):
+                            </Label>
+                            <textarea
+                                value={akibat}
+                                onChange={(e) => setAkibat(e.target.value)}
+                                className="w-full h-20 p-3 border border-slate-300 rounded-none text-xs focus:border-blue-600 focus:outline-none leading-relaxed font-sans text-red-700 font-semibold"
+                            />
+                        </div>
+
+                        {/* 5. REKOMENDASI */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                                <span className="bg-slate-800 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-mono">5</span>
+                                Rekomendasi (Tindakan Penyetoran Kasda &amp; Penertiban Administrasi):
+                            </Label>
+                            <textarea
+                                value={rekomendasi}
+                                onChange={(e) => setRekomendasi(e.target.value)}
+                                className="w-full h-28 p-3 border border-slate-300 rounded-none text-xs focus:border-blue-600 focus:outline-none leading-relaxed font-sans"
+                            />
+                        </div>
                     </div>
                 </div>
             )}

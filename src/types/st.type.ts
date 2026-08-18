@@ -3,6 +3,14 @@
 export type PeranSt = 'Pengawas_Teknis' | 'Ketua_Tim' | 'Anggota_Tim';
 export type StatusSt = 'DRAF' | 'AKTIF' | 'SELESAI';
 
+export interface SuratTugasAuditorItem {
+    auditorId: string;
+    nama: string;
+    nip: string;
+    jabatan?: string;
+    peranDalamTim: string;
+}
+
 export interface SuratTugas {
     id: string;
     noSt: string;
@@ -12,8 +20,10 @@ export interface SuratTugas {
     tglMulai: string;
     tglSelesai: string;
     lokasi: string;
+    pengawasTeknisId?: string;
     ketuaTimId: string; // ID Auditor
     anggotaIds: string[]; // List ID Auditor
+    stAuditors?: SuratTugasAuditorItem[];
     status: 'DRAFT' | 'PENDING_APPROVAL' | 'PUBLISHED' | 'SELESAI';
     tteHash?: string;
     signedBy?: string;

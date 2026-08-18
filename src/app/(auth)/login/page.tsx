@@ -59,7 +59,7 @@ export default function LoginPage() {
                 pegawaiId: isPimpinan 
                     ? 'bb222222-2222-2222-2222-222222222222' 
                     : isAuditor 
-                    ? 'cc333333-3333-3333-3333-333333333333' // Budi Santoso/Heru
+                    ? 'b8f8e224-bf30-462b-a417-b60a95ecc603' // Budi Santoso (Ketua Tim)
                     : isOpd 
                     ? undefined 
                     : 'aa111111-1111-1111-1111-111111111111', // Kasubag
